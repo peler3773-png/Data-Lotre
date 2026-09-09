@@ -1,0 +1,2 @@
+https://nclottery.com/pick4-download
+https://www.valottery.com/api/v1/downloadall?gameId=1040
