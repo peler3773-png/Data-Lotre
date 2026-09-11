@@ -13,18 +13,18 @@ async function ambilPengaturan() {
     pengaturan = await res.json();
     console.log("✅ Pengaturan berhasil dimuat");
     console.log("📌 Sumber DB:", pengaturan.sumber_database);
-    console.log("📌 Nama Tabel:", pengaturan.nama_tabel);
     return pengaturan;
   } catch (err) {
     console.error("❌ Error ambil pengaturan:", err);
+    tampilkanPesan("❌ Gagal memuat pengaturan: " + err.message);
     return null;
   }
 }
 
-// === BACA FILE DATABASE (.db / teks) ===
+// === BACA FILE DATABASE ===
 async function bacaDatabase() {
   if (!pengaturan) {
-    console.warn("⚠️ Pengaturan belum dimuat");
+    tampilkanPesan("⚠️ Pengaturan belum dimuat");
     return [];
   }
 
@@ -33,57 +33,90 @@ async function bacaDatabase() {
     const res = await fetch(urlDB);
     if (!res.ok) throw new Error("File database tidak ditemukan / link mati");
 
-    // Baca sebagai teks
     const teks = await res.text();
-    console.log("✅ Database berhasil dibaca, ukuran:", teks.length, "karakter");
+    console.log("✅ Database berhasil dibaca");
 
-    // === PARSE DATA (sesuaikan format isi .db kamu) ===
-    // Asumsi tiap baris: kode_pasaran|tanggal|angka
+    // Parse data: pasaran|tanggal|angka
     const baris = teks.trim().split("\n");
     dataHasil = baris.map((b, i) => {
       const kolom = b.split("|");
       return {
         pasaran: kolom[0]?.trim(),
         tanggal: kolom[1]?.trim(),
-        angka: kolom[2]?.trim(),
-        barisKe: i + 1
+        angka: kolom[2]?.trim()
       };
     }).filter(r => r.pasaran && r.angka);
 
-    console.log(`✅ Berhasil parse ${dataHasil.length} baris data`);
+    console.log(`✅ ${dataHasil.length} baris data siap`);
     return dataHasil;
 
   } catch (err) {
     console.error("❌ Error baca database:", err);
+    tampilkanPesan("❌ Gagal baca database: " + err.message);
     return [];
   }
 }
 
-// === AMBIL DATA BERDASARKAN KODE PASARAN ===
-function cariDataPasaran(kodePasaran) {
-  if (!dataHasil.length) return [];
-  return dataHasil.filter(d => d.pasaran === kodePasaran);
+// === TAMPILKAN PESAN KE HALAMAN ===
+function tampilkanPesan(teks) {
+  const el = document.getElementById("info-db");
+  if (el) el.innerHTML += teks + "<br>";
 }
 
-// === JALANKAN OTOMATIS ===
+// === TAMPILKAN DATA KE HALAMAN ===
+function tampilkanData() {
+  const wadah = document.getElementById("daftar-data");
+  if (!wadah) return;
+
+  if (!dataHasil.length) {
+    wadah.innerHTML = "<p>Belum ada data.</p>";
+    return;
+  }
+
+  let html = "<h3>📊 Data Hasil Undian</h3><table border='1' cellpadding='6' style='border-collapse:collapse;'>";
+  html += "<tr><th>Pasaran</th><th>Tanggal</th><th>Angka</th></tr>";
+
+  dataHasil.forEach(d => {
+    html += `<tr><td>${d.pasaran}</td><td>${d.tanggal}</td><td>${d.angka}</td></tr>`;
+  });
+
+  html += "</table>";
+  wadah.innerHTML = html;
+}
+
+// === MULAI SEMUA PROSES ===
 async function mulai() {
-  console.log("🔄 Memulai proses...");
+  tampilkanPesan("🔄 Sedang memuat pengaturan...");
   await ambilPengaturan();
+  tampilkanPesan("🔄 Sedang membaca database...");
   await bacaDatabase();
-  console.log("✅ Selesai! Data siap dipakai.");
+  tampilkanPesan(`✅ Selesai! ${dataHasil.length} data siap.`);
+  tampilkanData();
 }
 
-// === EKSPOR UNTUK DIPAKAI DI HALAMAN ===
-window.appData = {
-  pengaturan: () => pengaturan,
-  semuaData: () => dataHasil,
-  cari: cariDataPasaran,
-  mulai
-};
+// === BUAT TEMPAT TAMPILAN OTOMATIS ===
+function buatWadahTampilan() {
+  if (document.getElementById("wadah-app")) return;
 
-// Jalankan saat halaman siap
+  const wadah = document.createElement("div");
+  wadah.id = "wadah-app";
+  wadah.style.padding = "15px";
+  wadah.style.fontFamily = "sans-serif";
+  wadah.innerHTML = `
+    <h2>📡 Data Loader — Lotre</h2>
+    <div id="info-db" style="background:#f5f5f5; padding:10px; border-radius:5px; margin-bottom:15px;"></div>
+    <div id="daftar-data"></div>
+  `;
+  document.body.appendChild(wadah);
+}
+
+// Jalankan otomatis
 if (document.readyState === "loading") {
-  document.addEventListener("DOMContentLoaded", mulai);
+  document.addEventListener("DOMContentLoaded", () => {
+    buatWadahTampilan();
+    mulai();
+  });
 } else {
+  buatWadahTampilan();
   mulai();
 }
