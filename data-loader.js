@@ -35,11 +35,9 @@ async function bacaDatabase() {
     tampilkanPesan("⚠️ Pengaturan belum siap");
     return [];
   }
-
   try {
     const res = await fetch(pengaturan.sumber_database);
     if (!res.ok) throw new Error("File database tidak ditemukan");
-
     const teks = await res.text();
     console.log("✅ Database terbaca");
 
@@ -56,7 +54,6 @@ async function bacaDatabase() {
 
     console.log(`✅ ${dataHasil.length} baris data siap`);
     return dataHasil;
-
   } catch (err) {
     console.error("❌ Error database:", err);
     tampilkanPesan("❌ Gagal baca database: " + err.message);
@@ -75,20 +72,16 @@ function tampilkanPesan(teks) {
 function tampilkanTabel() {
   const wadah = document.getElementById("tabel-data");
   if (!wadah) return;
-
   if (!dataHasil.length) {
     wadah.innerHTML = "<p>Belum ada data.</p>";
     return;
   }
-
   let html = "<h3>📊 Data Hasil Undian</h3>";
   html += "<table border='1' cellpadding='8' style='border-collapse:collapse;'>";
   html += "<tr style='background:#eee;'><th>Pasaran</th><th>Tanggal</th><th>Angka</th></tr>";
-
   dataHasil.forEach(d => {
     html += `<tr><td>${d.pasaran}</td><td>${d.tanggal}</td><td>${d.angka}</td></tr>`;
   });
-
   html += "</table>";
   wadah.innerHTML = html;
 }
@@ -112,7 +105,6 @@ async function mulaiSemua() {
 // =============================================
 function buatWadah() {
   if (document.getElementById("wadah-app")) return;
-
   const wadah = document.createElement("div");
   wadah.id = "wadah-app";
   wadah.style.padding = "20px";
