@@ -1,10 +1,8 @@
 {
-  "sumber_database": "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/sonora_database.db",
-  "nama_tabel": "hasil_undian",
-  "parameter_global": {
-    "pilihan_orde": 1,
-    "total_perulangan": 135
-  },
+  "sumber_database": "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt",
+  "daftar_pasaran": [],
+  "nama_tabel": "sonora_table"
+},
   "daftar_pasaran": [
     "GM5", "IDM", "KYM", "TMD", "FLM", "RIM", "TXD", "INM", "MSM", "MCSM", "DCM", "DWD", "VD", "NYM", "WCS", "NCD",
     "MQ03", "OG1", "WV", "GGE", "OG2", "TXE", "TE", "MGE", "OHE", "DCE", "DWN", "MLE", "MCSE", "CLF", "FLE", "MSE",
