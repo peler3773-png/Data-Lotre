@@ -1,7 +1,7 @@
 // =============================================
 // KONFIGURASI — PASTIKAN LINK BENAR
 // =============================================
-"sumber_database": "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/sonora_database.db"
+const PENGATURAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/pengaturan.json";
 
 // =============================================
 // VARIABEL GLOBAL
