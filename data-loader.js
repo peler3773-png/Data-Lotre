@@ -1,44 +1,51 @@
-// === KONFIGURASI ===
+// =============================================
+// KONFIGURASI — PASTIKAN LINK BENAR
+// =============================================
 const PENGATURAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/pengaturan.json";
 
-// === VARIABEL GLOBAL ===
+// =============================================
+// VARIABEL GLOBAL
+// =============================================
 let pengaturan = null;
 let dataHasil = [];
 
-// === AMBIL PENGATURAN DARI JSON ===
+// =============================================
+// AMBIL PENGATURAN DARI JSON
+// =============================================
 async function ambilPengaturan() {
   try {
     const res = await fetch(PENGATURAN_URL);
-    if (!res.ok) throw new Error("Gagal baca pengaturan.json");
+    if (!res.ok) throw new Error("Tidak bisa baca pengaturan.json");
     pengaturan = await res.json();
     console.log("✅ Pengaturan berhasil dimuat");
     console.log("📌 Sumber DB:", pengaturan.sumber_database);
     return pengaturan;
   } catch (err) {
-    console.error("❌ Error ambil pengaturan:", err);
-    tampilkanPesan("❌ Gagal memuat pengaturan: " + err.message);
+    console.error("❌ Error pengaturan:", err);
+    tampilkanPesan("❌ Gagal baca pengaturan: " + err.message);
     return null;
   }
 }
 
-// === BACA FILE DATABASE ===
+// =============================================
+// BACA FILE DATABASE
+// =============================================
 async function bacaDatabase() {
   if (!pengaturan) {
-    tampilkanPesan("⚠️ Pengaturan belum dimuat");
+    tampilkanPesan("⚠️ Pengaturan belum siap");
     return [];
   }
 
   try {
-    const urlDB = pengaturan.sumber_database;
-    const res = await fetch(urlDB);
-    if (!res.ok) throw new Error("File database tidak ditemukan / link mati");
+    const res = await fetch(pengaturan.sumber_database);
+    if (!res.ok) throw new Error("File database tidak ditemukan");
 
     const teks = await res.text();
-    console.log("✅ Database berhasil dibaca");
+    console.log("✅ Database terbaca");
 
-    // Parse data: pasaran|tanggal|angka
+    // Pisah per baris & per kolom (format: pasaran|tanggal|angka)
     const baris = teks.trim().split("\n");
-    dataHasil = baris.map((b, i) => {
+    dataHasil = baris.map(b => {
       const kolom = b.split("|");
       return {
         pasaran: kolom[0]?.trim(),
@@ -51,21 +58,22 @@ async function bacaDatabase() {
     return dataHasil;
 
   } catch (err) {
-    console.error("❌ Error baca database:", err);
+    console.error("❌ Error database:", err);
     tampilkanPesan("❌ Gagal baca database: " + err.message);
     return [];
   }
 }
 
-// === TAMPILKAN PESAN KE HALAMAN ===
+// =============================================
+// TAMPILKAN KE HALAMAN
+// =============================================
 function tampilkanPesan(teks) {
-  const el = document.getElementById("info-db");
+  const el = document.getElementById("info-app");
   if (el) el.innerHTML += teks + "<br>";
 }
 
-// === TAMPILKAN DATA KE HALAMAN ===
-function tampilkanData() {
-  const wadah = document.getElementById("daftar-data");
+function tampilkanTabel() {
+  const wadah = document.getElementById("tabel-data");
   if (!wadah) return;
 
   if (!dataHasil.length) {
@@ -73,8 +81,9 @@ function tampilkanData() {
     return;
   }
 
-  let html = "<h3>📊 Data Hasil Undian</h3><table border='1' cellpadding='6' style='border-collapse:collapse;'>";
-  html += "<tr><th>Pasaran</th><th>Tanggal</th><th>Angka</th></tr>";
+  let html = "<h3>📊 Data Hasil Undian</h3>";
+  html += "<table border='1' cellpadding='8' style='border-collapse:collapse;'>";
+  html += "<tr style='background:#eee;'><th>Pasaran</th><th>Tanggal</th><th>Angka</th></tr>";
 
   dataHasil.forEach(d => {
     html += `<tr><td>${d.pasaran}</td><td>${d.tanggal}</td><td>${d.angka}</td></tr>`;
@@ -84,39 +93,59 @@ function tampilkanData() {
   wadah.innerHTML = html;
 }
 
-// === MULAI SEMUA PROSES ===
-async function mulai() {
-  tampilkanPesan("🔄 Sedang memuat pengaturan...");
+// =============================================
+// JALANKAN SEMUA
+// =============================================
+async function mulaiSemua() {
+  tampilkanPesan("🔄 Membaca pengaturan...");
   await ambilPengaturan();
-  tampilkanPesan("🔄 Sedang membaca database...");
+  
+  tampilkanPesan("🔄 Membaca database...");
   await bacaDatabase();
-  tampilkanPesan(`✅ Selesai! ${dataHasil.length} data siap.`);
-  tampilkanData();
+  
+  tampilkanPesan(`✅ Selesai! ${dataHasil.length} data dimuat.`);
+  tampilkanTabel();
 }
 
-// === BUAT TEMPAT TAMPILAN OTOMATIS ===
-function buatWadahTampilan() {
+// =============================================
+// BUAT TEMPAT TAMPILAN OTOMATIS
+// =============================================
+function buatWadah() {
   if (document.getElementById("wadah-app")) return;
 
   const wadah = document.createElement("div");
   wadah.id = "wadah-app";
-  wadah.style.padding = "15px";
-  wadah.style.fontFamily = "sans-serif";
+  wadah.style.padding = "20px";
+  wadah.style.fontFamily = "Arial, sans-serif";
   wadah.innerHTML = `
-    <h2>📡 Data Loader — Lotre</h2>
-    <div id="info-db" style="background:#f5f5f5; padding:10px; border-radius:5px; margin-bottom:15px;"></div>
-    <div id="daftar-data"></div>
+    <h2>📡 Data Lotre</h2>
+    <div id="info-app" style="background:#f8f8f8; padding:12px; border-radius:6px; margin-bottom:15px;"></div>
+    <div id="tabel-data"></div>
   `;
   document.body.appendChild(wadah);
 }
 
-// Jalankan otomatis
+// =============================================
+// MULAI SAAT HALAMAN SIAP
+// =============================================
 if (document.readyState === "loading") {
   document.addEventListener("DOMContentLoaded", () => {
-    buatWadahTampilan();
-    mulai();
+    buatWadah();
+    mulaiSemua();
   });
 } else {
-  buatWadahTampilan();
-  mulai();
+  buatWadah();
+  mulaiSemua();
 }
+
+// =============================================
+// FUNGSI UNTUK DIPAKAI DARI HALAMAN
+// =============================================
+window.appData = {
+  pengaturan: () => pengaturan,
+  semuaData: () => dataHasil,
+  cari: function(kodePasaran) {
+    return dataHasil.filter(d => d.pasaran === kodePasaran);
+  },
+  mulai: mulaiSemua
+};
