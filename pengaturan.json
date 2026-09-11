@@ -4,7 +4,7 @@
     "GM5", "IDM", "KYM", "TMD", "FLM", "RIM", "TXD", "INM", "MSM", "MCSM", "DCM", "DWD", "VD", "NYM", "WCS", "NCD",
     "MQ03", "OG1", "WV", "GGE", "OG2", "TXE", "TE", "MGE", "OHE", "DCE", "DWN", "MLE", "MCSE", "CLF", "FLE", "MSE",
     "OG3", "INE", "NYE", "IDE", "NJE", "VN", "KYE", "TXN", "NCE", "GGN", "OG4", "BE", "TTM1", "SD", "SDLT", "TTM2",
-    "SGP", "MQ18", "TTH3", "PS", "MQ21", "TM", "TXM", "TTM4", "HK", "HKLT", "MLM", "GGM", "OHM", "MGM", "MQ00", "NJM", "SCM"
+    "SGP", "MQ18", "TTM3", "PS", "MQ21", "TM", "TXM", "TTM4", "HK", "HKLT", "MLM", "GGM", "OHM", "MGM", "MQ00", "NJM", "SCM"
   ],
   "nama_tabel": "sonora_table",
   "nama_panjang": {
@@ -58,7 +58,7 @@
     "TTM2": "TOTO MACAU JAM 16:00",
     "SGP": "SINGAPORE",
     "MQ18": "MOROCCO QUATRO 18:00",
-    "TTH3": "TOTO MACAU JAM 19:00",
+    "TTM3": "TOTO MACAU JAM 19:00",
     "PS": "PHILIPPINES",
     "MQ21": "MOROCCO QUATRO 21:00",
     "TM": "TENNESSEE MORNING",
@@ -125,7 +125,7 @@
     "TTM2": "16:00",
     "SGP": "17:30",
     "MQ18": "17:45",
-    "TTH3": "19:00",
+    "TTM3": "19:00",
     "PS": "19:50",
     "MQ21": "20:45",
     "TM": "21:05",
@@ -138,7 +138,8 @@
     "OHM": "23:15",
     "MGM": "23:45",
     "MQ00": "23:45",
-    "NJM": "23:45"
+    "NJM": "23:45",
+    "SCM": "23:45"
   },
   "jadwal_libur": {
     "PS": ["Minggu"],
