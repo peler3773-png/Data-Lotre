@@ -1,5 +1,5 @@
 // =============================================
-// KONFIGURASI — PASTIKAN LINK BENAR
+// KONFIGURASI
 // =============================================
 const PENGATURAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/pengaturan.json";
 
@@ -28,7 +28,7 @@ async function ambilPengaturan() {
 }
 
 // =============================================
-// BACA FILE DATABASE
+// BACA FILE DATABASE (.txt)
 // =============================================
 async function bacaDatabase() {
   if (!pengaturan) {
@@ -38,10 +38,11 @@ async function bacaDatabase() {
   try {
     const res = await fetch(pengaturan.sumber_database);
     if (!res.ok) throw new Error("File database tidak ditemukan");
+
     const teks = await res.text();
     console.log("✅ Database terbaca");
 
-    // Pisah per baris & per kolom (format: pasaran|tanggal|angka)
+    // Format: pasaran|tanggal|angka
     const baris = teks.trim().split("\n");
     dataHasil = baris.map(b => {
       const kolom = b.split("|");
