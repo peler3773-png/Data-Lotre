@@ -32,7 +32,7 @@ def proses_semua():
                 mentah_data.append({"pasaran": pasaran, "angka": [int(d) for d in angka_4d]})
                 semua_pasaran.add(pasaran)
 
-    LIMIT_DATA = 50000
+    LIMIT_DATA = 80000
     if len(mentah_data) > LIMIT_DATA:
         mentah_data = mentah_data[-LIMIT_DATA:]
 
@@ -99,7 +99,7 @@ def proses_semua():
         for idx_pos, nama in enumerate(nama_posisi):
             urut = np.argsort(pred[idx_pos][0])[::-1]
             posisi_data[nama] = {
-                "lima": sorted([str(a) for a in urut[:5]]),
+                "lima": sorted([str(a) for a in urut[:7]]),
                 "sembilan": [str(a) for a in urut[:9]]
             }
         hasil_akhir["hasil"][p] = posisi_data
