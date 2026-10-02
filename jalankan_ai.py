@@ -76,8 +76,14 @@ def proses_semua():
 
     # === LATIH MODEL ===
     print("🧠 Melatih model LSTM...")
-    model.fit({'input_angka': X_angka, 'input_pasaran': X_konteks},
-              y_train, epochs=45, batch_size=128, verbose=0)
+    model.fit(
+        {'input_angka': X_angka, 'input_pasaran': X_konteks},
+        y_train,
+        epochs=60,
+        batch_size=256,
+        validation_split=0.05,
+        verbose=1
+    )
 
     # === DATA TERBARU ===
     input_terbaru = np.array([d["angka"] for d in mentah_data[-lookback:]], dtype=np.float32)
