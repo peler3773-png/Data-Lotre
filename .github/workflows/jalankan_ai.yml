@@ -1,28 +1,37 @@
 name: Jalankan Prediksi AI
 on:
-  workflow_dispatch:  # Bisa diklik langsung dari halaman GitHub
+  workflow_dispatch:
   schedule:
-    - cron: '0 * * * *'  # ✅ Diperbarui TIAP 1 JAM otomatis
+    - cron: '0 * * * *'
+    - cron: '30 17 * * *'  # Khusus sebelum tutup MQ18
+
 jobs:
   jalankan:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write  # Izin wajib untuk push
     steps:
-      - name: Ambil Semua File
+      - name: Ambil File
         uses: actions/checkout@v4
+
       - name: Siapkan Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+
       - name: Pasang Library
         run: |
           python -m pip install --upgrade pip
-          pip install numpy tensorflow-cpu
-      - name: Jalankan AI LSTM
+          pip install numpy tensorflow-cpu==2.15.0  # Versi spesifik agar stabil
+
+      - name: Jalankan AI
         run: python jalankan_ai.py
-      - name: Simpan Hasil ke GitHub
+
+      - name: Simpan Hasil
         run: |
           git config --global user.name "peler3773-png"
           git config --global user.email "peler3773@users.noreply.github.com"
           git add hasil_prediksi.json
-          git commit -m "🤖 Update hasil prediksi $(date +'%Y-%m-%d %H:%M')" || exit 0
+          git commit -m "🤖 Update $(date +'%Y-%m-%d %H:%M')" || true
           git push
