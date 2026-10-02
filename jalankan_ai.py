@@ -189,8 +189,8 @@ def proses_semua():
     model.fit(
         {'input_angka': X_angka, 'input_pasaran': X_konteks},
         y_train,
-        epochs=75,
-        batch_size=512,
+        epochs=50,
+        batch_size=250,
         verbose=0
     )
 
