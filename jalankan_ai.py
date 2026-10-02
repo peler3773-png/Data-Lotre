@@ -3,18 +3,14 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import urllib.request
 import json
+from datetime import datetime
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import LSTM, Dense, Input, Embedding, Flatten, concatenate
 import tensorflow as tf
 tf.get_logger().setLevel('ERROR')
 
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
-
-def gabungkan_hasil(daftar_7, daftar_9):
-    semua_digit = set('0123456789')
-    ada_di_9 = set(daftar_9)
-    hilang = sorted(semua_digit - ada_di_9)
-    return hilang + daftar_7  # hilang duluan, lalu 7 digit urutan asli
+LIMIT_DATA = 80000
 
 def proses_semua():
     # === AMBIL DATA ===
@@ -35,7 +31,6 @@ def proses_semua():
                 mentah_data.append({"pasaran": pasaran, "angka": [int(d) for d in angka_4d]})
                 semua_pasaran.add(pasaran)
     
-    LIMIT_DATA = 80000
     if len(mentah_data) > LIMIT_DATA:
         mentah_data = mentah_data[-LIMIT_DATA:]
     
@@ -44,8 +39,7 @@ def proses_semua():
     total_jenis_pasaran = len(list_pasaran)
     lookback = 10
     
-    print(f"📊 Ditemukan {total_jenis_pasaran} jenis pasaran dari data:")
-    print(f"   {', '.join(list_pasaran)}\n")
+    print(f"📊 Ditemukan {total_jenis_pasaran} pasaran\n")
     
     # === BANGUN MODEL LSTM ===
     input_angka = Input(shape=(lookback, 4), name='input_angka')
@@ -76,7 +70,7 @@ def proses_semua():
     y_train = [Y[:,0], Y[:,1], Y[:,2], Y[:,3]]
     
     # === LATIH MODEL ===
-    print("🧠 Melatih model LSTM...")
+    print("🧠 Melatih model...")
     model.fit({'input_angka': X_angka, 'input_pasaran': X_konteks},
               y_train, epochs=45, batch_size=128, verbose=0)
     
@@ -84,43 +78,59 @@ def proses_semua():
     input_terbaru = np.array([d["angka"] for d in mentah_data[-lookback:]], dtype=np.float32)
     input_terbaru = np.expand_dims(input_terbaru, axis=0)
     
-    # === PREDIKSI SEMUA PASARAN ===
-    hasil_akhir = {
-        "diperbarui": __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "total_data": len(mentah_data),
-        "daftar_pasaran": list_pasaran,
-        "hasil": {}
-    }
+    # === FUNGSI PROSES ===
+    def proses_posisi(urut):
+        semua_digit = set('0123456789')
+        daftar_9 = [str(a) for a in urut[:9]]
+        set_9 = set(daftar_9)
+        digit_hilang = sorted(semua_digit - set_9)
+        daftar_7 = [str(a) for a in urut[:7]]
+        gabungan = digit_hilang + daftar_7
+        return ''.join(gabungan), ''.join(daftar_9)
     
-    nama_posisi = ["AS", "KOP", "KEPALA", "EKOR"]
+    # === HASIL ===
+    waktu_update = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    semua_hasil = {}
     
     for p in list_pasaran:
         idx_target = np.array([pasaran_ke_idx[p]])
         pred = model.predict({'input_angka': input_terbaru, 'input_pasaran': idx_target}, verbose=0)
-        posisi_data = {}
         
-        for idx_pos, nama in enumerate(nama_posisi):
-            urut = np.argsort(pred[idx_pos][0])[::-1]
-            daftar_7 = [str(a) for a in urut[:7]]
-            daftar_9 = [str(a) for a in urut[:9]]
-            gabung = gabungkan_hasil(daftar_7, daftar_9)
-            
-            posisi_data[nama] = {
-                "gabung": "".join(gabung)  # Tanpa pemisah, langsung rapat
-            }
+        g = {}
+        d9 = {}
+        for i, pos in enumerate(["AS", "KOP", "KEPALA", "EKOR"]):
+            urut = np.argsort(pred[i][0])[::-1]
+            g[pos], d9[pos] = proses_posisi(urut)
         
-        hasil_akhir["hasil"][p] = posisi_data
+        semua_hasil[p] = {"gabung": g, "9digit": d9}
+        
+        print(f"\n{'='*40}")
+        print(f"            POLA TARUNG")
+        print(f"{'='*40}")
+        print(f"PASARAN   : {p}")
+        print(f"UPDATE    : {waktu_update}")
+        print(f"DATA      : {LIMIT_DATA} BARIS DIPELAJARI")
+        print(f"{'='*40}")
+        for pos in ["AS", "KOP", "KEPALA", "EKOR"]:
+            print(f"POSISI {pos}:")
+            print(f"  7 DIGIT : {g[pos]}")
+            print(f"  9 DIGIT : {d9[pos]}")
+        print(f"  7 DIGIT : {g['AS']},{g['KOP']},{g['KEPALA']},{g['EKOR']}")
+        print(f"  9 DIGIT : {d9['AS']},{d9['KOP']},{d9['KEPALA']},{d9['EKOR']}")
+        print(f"{'='*40}")
+        print(f"SUMBER: JARINGAN SARAF TIRUAN LSTM")
+        print(f"{'='*40}")
     
-    # === SIMPAN HASIL ===
+    # Simpan JSON
     with open("hasil_prediksi.json", "w", encoding="utf-8") as f:
-        json.dump(hasil_akhir, f, ensure_ascii=False, indent=2)
+        json.dump({
+            "diperbarui": waktu_update,
+            "total_data": len(mentah_data),
+            "daftar_pasaran": list_pasaran,
+            "hasil": semua_hasil
+        }, f, ensure_ascii=False, indent=2)
     
-    print(f"✅ Selesai! Diproses: {len(list_pasaran)} pasaran → hasil_prediksi.json")
-    print("\n📋 CONTOH HASIL AKHIR:")
-    for p in list(list_pasaran[:3]):
-        print(f"\n{p}:")
-        for pos, val in hasil_akhir["hasil"][p].items():
-            print(f"  {pos}: {val['gabung']}")
+    print(f"\n✅ Selesai! Tersimpan di hasil_prediksi.json")
 
 if __name__ == "__main__":
     proses_semua()
