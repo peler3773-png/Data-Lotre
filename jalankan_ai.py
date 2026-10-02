@@ -12,8 +12,8 @@ import tensorflow as tf
 tf.get_logger().setLevel('ERROR')
 
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
-LOOKBACK = 10
-LIMIT_DATA = 80000
+LOOKBACK = 19
+LIMIT_DATA = 79999
 
 def proses_semua():
     # === AMBIL DATA — PERBAIKAN: timeout dipindah ke urlopen ===
