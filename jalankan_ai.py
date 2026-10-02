@@ -3,7 +3,7 @@ import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 # 🔒 KUNCI ACAK — HASIL STABIL
-SEED_TETAP = 20261002
+SEED_TETAP = 20261002A
 import random
 random.seed(SEED_TETAP)
 import numpy as np
