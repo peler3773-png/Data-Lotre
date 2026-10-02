@@ -1,22 +1,23 @@
-# jalankan_ai.py — FINAL: Syntax Fix + Stabil GitHub
+# jalankan_ai.py — OPTIMASI MEMORI: 65 Pasaran ✅
 import os, sys
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['OMP_NUM_THREADS'] = '1'
+os.environ['TF_NUM_INTRAOP_THREADS'] = '1'
+os.environ['TF_NUM_INTEROP_THREADS'] = '1'
 
-# ✅ WAJIB pakai tanda kutip kalau ada huruf
-SEED_TETAP = "20261002C"
+SEED_TETAP = "20261003A"
+import hashlib
+def seed_angka(s):
+    return int(hashlib.md5(s.encode()).hexdigest()[:8], 16)
 
 import random
-random.seed(SEED_TETAP)
+random.seed(seed_angka(SEED_TETAP))
 import numpy as np
-np.random.seed(hash(SEED_TETAP) % 4294967295)
+np.random.seed(seed_angka(SEED_TETAP))
 
-try:
-    import tensorflow as tf
-    tf.random.set_seed(hash(SEED_TETAP) % 4294967295)
-    tf.get_logger().setLevel('ERROR')
-except Exception as e:
-    print(f"❌ Gagal memuat TensorFlow: {e}")
-    sys.exit(1)
+import tensorflow as tf
+tf.random.set_seed(seed_angka(SEED_TETAP))
+tf.get_logger().setLevel('ERROR')
 
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import LSTM, Dense, Input, Embedding, Flatten, concatenate
@@ -96,7 +97,7 @@ def proses_semua():
     for p in list_p:
         d = data_terbaru[p]
         print(f" {p:8} | {d['nomor']:4} | {d['tanggal']} {d['waktu'][-8:]}")
-    print(f"📊 Total: {len(mentah_data)} baris | Pasaran: {n_p}")
+    print(f"\n📊 Total: {len(mentah_data)} baris | Pasaran: {n_p}")
 
     markov = MarkovModel()
     markov.latih([d["angka"] for d in mentah_data])
@@ -107,6 +108,7 @@ def proses_semua():
         print("⚠️ Data belum cukup!")
         return
 
+    print("📦 Menyiapkan data latih...")
     X = np.zeros((n_sampel, LOOKBACK, 4), dtype=np.float32)
     P = np.zeros(n_sampel, dtype=np.int32)
     Y = np.zeros((n_sampel, 4), dtype=np.int32)
@@ -116,22 +118,28 @@ def proses_semua():
         Y[i] = mentah_data[i+LOOKBACK]["angka"]
     yt = [Y[:,0], Y[:,1], Y[:,2], Y[:,3]]
 
-    # Model ringkas
-    in1 = Input(shape=(LOOKBACK,4))
-    l1 = LSTM(24, activation='relu')(in1)
-    in2 = Input(shape=(1,))
-    emb = Flatten()(Embedding(n_p, 4)(in2))
-    gab = concatenate([l1, emb])
-    hid = Dense(12, activation='relu')(gab)
-    out = [Dense(10, activation='softmax')(hid) for _ in range(4)]
+    # ==============================================
+    # MODEL SANGAT RINGKAS — untuk 65 pasaran di GitHub
+    # ==============================================
+    print("🧠 Membuat model ringkas...")
+    in1 = Input(shape=(LOOKBACK, 4), name='in_angka')
+    l1 = LSTM(16, activation='relu', name='lstm')(in1)  # Kecil: 16 unit
+    in2 = Input(shape=(1,), name='in_pasaran')
+    emb = Flatten(name='flt')(Embedding(n_p, 2, name='emb')(in2))  # Sangat kecil: 2 dimensi
+    gab = concatenate([l1, emb], name='gab')
+    hid = Dense(8, activation='relu', name='hid')(gab)  # Kecil: 8 unit
+    out_as  = Dense(10, activation='softmax', name='as')(hid)
+    out_kop = Dense(10, activation='softmax', name='kop')(hid)
+    out_kep = Dense(10, activation='softmax', name='kep')(hid)
+    out_eko = Dense(10, activation='softmax', name='eko')(hid)
 
-    model = Model([in1, in2], out)
-    model.compile('adam', loss='sparse_categorical_crossentropy')
+    model = Model([in1, in2], [out_as, out_kop, out_kep, out_eko])
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
 
-    print("🧠 Melatih...")
-    model.fit([X, P], yt, epochs=50, batch_size=250, verbose=0)
+    print(f"🧠 Melatih {n_sampel} sampel...")
+    model.fit([X, P], yt, epochs=30, batch_size=512, verbose=1)  # Batch besar = cepat & hemat memori
 
-    # Prediksi
+    # Data terakhir untuk prediksi
     X_last = np.array([mentah_data[j]["angka"] for j in range(-LOOKBACK,0)], dtype=np.float32)
     X_last = np.expand_dims(X_last, 0)
     deret = []
@@ -143,10 +151,11 @@ def proses_semua():
         "diperbarui": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "zona_waktu": "WIB",
         "total_data": len(mentah_data),
+        "jumlah_pasaran": n_p,
         "daftar_pasaran": list_p,
         "data_terbaru": data_terbaru,
         "seed": SEED_TETAP,
-        "pengaturan": f"LIMIT={LIMIT_DATA} | EPOCH=50 | BATCH=250",
+        "pengaturan": f"LIMIT={LIMIT_DATA} | EPOCH=30 | BATCH=512 | LSTM=16",
         "hasil": {}
     }
 
