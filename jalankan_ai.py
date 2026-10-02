@@ -51,7 +51,7 @@ def proses_semua():
 
     # === BANGUN MODEL LSTM ===
     input_angka = Input(shape=(LOOKBACK, 4), name='input_angka')
-    lstm_layer = LSTM(64, activation='relu', return_sequences=False)(input_angka)
+    lstm_layer = LSTM(65, activation='relu', return_sequences=False)(input_angka)
 
     input_pasaran = Input(shape=(1,), name='input_pasaran')
     emb_pasaran = Embedding(input_dim=total_jenis_pasaran, output_dim=8)(input_pasaran)
@@ -90,7 +90,7 @@ def proses_semua():
     model.fit(
         {'input_angka': X_angka, 'input_pasaran': X_konteks},
         y_train,
-        epochs=64,
+        epochs=65,
         batch_size=512,
         verbose=0
     )
