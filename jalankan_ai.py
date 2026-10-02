@@ -1,8 +1,8 @@
-# jalankan_ai.py — LSTM + MARKOV 1/2 + CETAK DATA TERBARU
+# jalankan_ai.py — FINAL: LSTM + MARKOV 1/2 + DATA TERBARU TEPAT
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
-# 🔒 KUNCI ACAK — HASIL TETAP SAMA
+# 🔒 KUNCI ACAK — HASIL STABIL
 SEED_TETAP = 20261002
 import random
 random.seed(SEED_TETAP)
@@ -29,8 +29,8 @@ LIMIT_DATA = 80000
 # ==============================================
 class MarkovModel:
     def __init__(self):
-        self.orde1 = {}  # A → B
-        self.orde2 = {}  # (A,B) → C
+        self.orde1 = {}
+        self.orde2 = {}
 
     def latih(self, daftar_angka_4d):
         self.orde1 = {}
@@ -39,7 +39,6 @@ class MarkovModel:
         for angka in daftar_angka_4d:
             semua_deret.extend(angka)
 
-        # Orde 1
         for i in range(len(semua_deret) - 1):
             a = semua_deret[i]
             b = semua_deret[i+1]
@@ -47,7 +46,6 @@ class MarkovModel:
                 self.orde1[a] = {}
             self.orde1[a][b] = self.orde1[a].get(b, 0) + 1
 
-        # Orde 2
         for i in range(len(semua_deret) - 2):
             a = semua_deret[i]
             b = semua_deret[i+1]
@@ -90,7 +88,7 @@ def proses_semua():
 
     mentah_data = []
     semua_pasaran = set()
-    data_terbaru_per_pasaran = {}  # Simpan data terakhir per pasaran
+    data_terbaru_per_pasaran = {}
 
     for baris in isi_file.strip().splitlines():
         bagian = baris.split('|')
@@ -99,7 +97,7 @@ def proses_semua():
         pasaran = bagian[0].strip().upper()
         tgl = bagian[1].strip()
         angka_4d = bagian[2].strip()
-        waktu = bagian[3].strip() if len(bagian) > 3 else "—"
+        waktu = bagian[3].strip()
 
         if len(angka_4d) == 4 and angka_4d.isdigit():
             arr = [int(d) for d in angka_4d]
@@ -111,41 +109,45 @@ def proses_semua():
                 "waktu": waktu
             })
             semua_pasaran.add(pasaran)
-            # Simpan yang terbaru (karena urut dari atas ke bawah)
+            # ✅ Timpa = baris paling bawah = paling baru
             data_terbaru_per_pasaran[pasaran] = {
                 "nomor": angka_4d,
                 "tanggal": tgl,
                 "waktu": waktu
             }
 
+    # ✅ Urutkan: paling baru di posisi pertama
+    mentah_data.sort(key=lambda x: (x["tanggal"], x["waktu"]), reverse=True)
+
+    # ✅ Ambil 80rb PALING BARU saja
     if len(mentah_data) > LIMIT_DATA:
-        mentah_data = mentah_data[-LIMIT_DATA:]
+        mentah_data = mentah_data[:LIMIT_DATA]
 
     list_pasaran = sorted(semua_pasaran)
     pasaran_ke_idx = {p: i for i, p in enumerate(list_pasaran)}
     total_jenis_pasaran = len(list_pasaran)
 
     # ==============================================
-    # 📋 CETAK DATA TERBARU PER PASARAN
+    # 📋 CETAK DATA TERBARU
     # ==============================================
-    print("\n" + "="*50)
+    print("\n" + "="*55)
     print("📋 DATA TERBARU PER PASARAN")
-    print("="*50)
+    print("="*55)
     for p in list_pasaran:
         d = data_terbaru_per_pasaran[p]
-        print(f" {p:8} | {d['nomor']:4} | {d['tanggal']:10} {d['waktu']:5}")
-    print("="*50 + "\n")
+        print(f" {p:8} | {d['nomor']:4} | {d['tanggal']} {d['waktu'][-8:]}")
+    print("="*55 + "\n")
     print(f"📊 Total Data: {len(mentah_data)} baris | Pasaran: {total_jenis_pasaran}")
 
     # ==============================================
-    # LATIH MARKOV 1 & 2
+    # LATIH MARKOV
     # ==============================================
     markov = MarkovModel()
     markov.latih([d["angka"] for d in mentah_data])
-    print(f"🔗 Markov 1 & 2 → Siap")
+    print(f"🔗 Markov 1 & 2 → Terlatih")
 
     # ==============================================
-    # BANGUN MODEL LSTM
+    # BANGUN LSTM
     # ==============================================
     input_angka = Input(shape=(LOOKBACK, 4), name='input_angka')
     lstm_layer = LSTM(64, activation='relu', return_sequences=False)(input_angka)
@@ -182,7 +184,7 @@ def proses_semua():
 
     y_train = [Y[:, 0], Y[:, 1], Y[:, 2], Y[:, 3]]
 
-    # === LATIH LSTM ===
+    # === LATIH ===
     print(f"🧠 Melatih LSTM (75 Epoch / 512 Batch)...")
     model.fit(
         {'input_angka': X_angka, 'input_pasaran': X_konteks},
@@ -192,7 +194,7 @@ def proses_semua():
         verbose=0
     )
 
-    # === DATA TERBARU ===
+    # === INPUT TERBARU ===
     input_terbaru = np.array(
         [mentah_data[j]["angka"] for j in range(-LOOKBACK, 0)],
         dtype=np.float32
@@ -217,7 +219,7 @@ def proses_semua():
         "zona_waktu": "WIB / UTC+7",
         "total_data": len(mentah_data),
         "daftar_pasaran": list_pasaran,
-        "data_terbaru": data_terbaru_per_pasaran,  # Disimpan juga di JSON
+        "data_terbaru": data_terbaru_per_pasaran,
         "metode": f"LSTM {BOBOT_LSTM} + MARKOV1 {BOBOT_MARKOV1} + MARKOV2 {BOBOT_MARKOV2}",
         "seed": SEED_TETAP,
         "hasil": {}
@@ -231,7 +233,8 @@ def proses_semua():
         pred_lstm = model.predict({'input_angka': input_terbaru, 'input_pasaran': idx_target}, verbose=0)
 
         posisi_data = {}
-        print(f"\n📌 {p}  | Terakhir: {data_terbaru_per_pasaran[p]['nomor']}")
+        dtr = data_terbaru_per_pasaran[p]
+        print(f"\n📌 {p:8} | Terakhir: {dtr['nomor']} | {dtr['tanggal']}")
         for idx_pos, nama in enumerate(nama_posisi):
             skor_lstm = pred_lstm[idx_pos][0]
             skor_mkv1 = markov.prediksi_orde1(satu_terakhir)
@@ -262,7 +265,7 @@ def proses_semua():
 
     print("\n" + "="*70)
     print(f"✅ Selesai → hasil_prediksi.json")
-    print(f"🔒 Seed: {SEED_TETAP} | Hasil stabil sampai data baru")
+    print(f"🔒 Seed: {SEED_TETAP} | Ubah seed jika ada data baru")
 
 if __name__ == "__main__":
     proses_semua()
