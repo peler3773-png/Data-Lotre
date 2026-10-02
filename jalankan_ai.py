@@ -32,7 +32,7 @@ def proses_semua():
                 mentah_data.append({"pasaran": pasaran, "angka": [int(d) for d in angka_4d]})
                 semua_pasaran.add(pasaran)
 
-    LIMIT_DATA = 25000
+    LIMIT_DATA = 50000
     if len(mentah_data) > LIMIT_DATA:
         mentah_data = mentah_data[-LIMIT_DATA:]
 
