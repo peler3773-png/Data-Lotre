@@ -1,8 +1,9 @@
-# jalankan_ai.py — FINAL: LSTM + MARKOV 1/2 + DATA TERBARU TEPAT
+# jalankan_ai.py — FIX GITHUB: Timeout + Memori + Stabil
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+os.environ['TF_FORCE_GPU_ALLOW_GROWTH'] = 'true'
 
-# 🔒 KUNCI ACAK — SESUAI UKURAN DATA BARU
+# 🔒 KUNCI ACAK
 SEED_TETAP = 20261002A
 import random
 random.seed(SEED_TETAP)
@@ -10,6 +11,12 @@ import numpy as np
 np.random.seed(SEED_TETAP)
 import tensorflow as tf
 tf.random.set_seed(SEED_TETAP)
+# Batasi memori
+gpus = tf.config.list_physical_devices('GPU')
+if gpus:
+    for gpu in gpus:
+        tf.config.experimental.set_memory_growth(gpu, True)
+tf.config.set_soft_device_placement(True)
 # =================================
 
 import urllib.request
@@ -22,10 +29,10 @@ tf.get_logger().setLevel('ERROR')
 
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
 LOOKBACK = 10
-LIMIT_DATA = 16250  # ✅ Ukuran data baru
+LIMIT_DATA = 16250
 
 # ==============================================
-# MODUL MARKOV ORDE 1 & ORDE 2
+# MODUL MARKOV ORDE 1 & 2
 # ==============================================
 class MarkovModel:
     def __init__(self):
@@ -78,13 +85,15 @@ class MarkovModel:
 
 
 def proses_semua():
-    # === AMBIL DATA ===
+    # === AMBIL DATA — Timeout diperpanjang ===
+    print(f"📥 Mengunduh data...")
     req = urllib.request.Request(
         DATA_UNDIAN_URL,
-        headers={'User-Agent': 'Mozilla/5.0'}
+        headers={'User-Agent': 'Mozilla/5.0 (compatible; DataLotre/1.0)'}
     )
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=120) as r:  # Diperpanjang 120 detik
         isi_file = r.read().decode('utf-8')
+    print(f"✅ Data diterima: {len(isi_file)} karakter")
 
     mentah_data = []
     semua_pasaran = set()
@@ -109,17 +118,16 @@ def proses_semua():
                 "waktu": waktu
             })
             semua_pasaran.add(pasaran)
-            # Timpa = baris paling bawah = paling baru
             data_terbaru_per_pasaran[pasaran] = {
                 "nomor": angka_4d,
                 "tanggal": tgl,
                 "waktu": waktu
             }
 
-    # Urutkan: paling baru di posisi pertama
+    # Urutkan: paling baru duluan
     mentah_data.sort(key=lambda x: (x["tanggal"], x["waktu"]), reverse=True)
 
-    # Ambil 16.250 PALING BARU saja
+    # Ambil 16.250 PALING BARU
     if len(mentah_data) > LIMIT_DATA:
         mentah_data = mentah_data[:LIMIT_DATA]
 
@@ -127,9 +135,7 @@ def proses_semua():
     pasaran_ke_idx = {p: i for i, p in enumerate(list_pasaran)}
     total_jenis_pasaran = len(list_pasaran)
 
-    # ==============================================
     # 📋 CETAK DATA TERBARU
-    # ==============================================
     print("\n" + "="*55)
     print("📋 DATA TERBARU PER PASARAN")
     print("="*55)
@@ -139,23 +145,19 @@ def proses_semua():
     print("="*55 + "\n")
     print(f"📊 Total Data: {len(mentah_data)} baris | Pasaran: {total_jenis_pasaran}")
 
-    # ==============================================
     # LATIH MARKOV
-    # ==============================================
     markov = MarkovModel()
     markov.latih([d["angka"] for d in mentah_data])
     print(f"🔗 Markov 1 & 2 → Terlatih")
 
-    # ==============================================
-    # BANGUN LSTM
-    # ==============================================
+    # BANGUN LSTM — diperkecil agar muat di GitHub
     input_angka = Input(shape=(LOOKBACK, 4), name='input_angka')
-    lstm_layer = LSTM(64, activation='relu', return_sequences=False)(input_angka)
+    lstm_layer = LSTM(32, activation='relu', return_sequences=False)(input_angka)  # Dari 64 → 32
     input_pasaran = Input(shape=(1,), name='input_pasaran')
-    emb_pasaran = Embedding(input_dim=total_jenis_pasaran, output_dim=8)(input_pasaran)
+    emb_pasaran = Embedding(input_dim=total_jenis_pasaran, output_dim=4)(input_pasaran)  # Dari 8 → 4
     flat_pasaran = Flatten()(emb_pasaran)
     gabungan_fitur = concatenate([lstm_layer, flat_pasaran])
-    dense_shared = Dense(32, activation='relu')(gabungan_fitur)
+    dense_shared = Dense(16, activation='relu')(gabungan_fitur)  # Dari 32 → 16
 
     out_as  = Dense(10, activation='softmax', name='output_as')(dense_shared)
     out_kop = Dense(10, activation='softmax', name='output_kop')(dense_shared)
@@ -165,9 +167,7 @@ def proses_semua():
     model = Model(inputs=[input_angka, input_pasaran], outputs=[out_as, out_kop, out_kep, out_eko])
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
 
-    # ==============================================
     # SIAPKAN DATA LATIH
-    # ==============================================
     total_sampel = len(mentah_data) - LOOKBACK
     if total_sampel < 1:
         print("⚠️ Data belum cukup!")
@@ -184,17 +184,17 @@ def proses_semua():
 
     y_train = [Y[:, 0], Y[:, 1], Y[:, 2], Y[:, 3]]
 
-    # === LATIH — 50 Epoch / 250 Batch ===
+    # LATIH — 50 Epoch / 250 Batch
     print(f"🧠 Melatih LSTM (50 Epoch / 250 Batch)...")
     model.fit(
         {'input_angka': X_angka, 'input_pasaran': X_konteks},
         y_train,
         epochs=50,
         batch_size=250,
-        verbose=0
+        verbose=1  # Ubah ke 1 kalau mau lihat kemajuan tiap epoch
     )
 
-    # === INPUT TERBARU ===
+    # INPUT TERBARU
     input_terbaru = np.array(
         [mentah_data[j]["angka"] for j in range(-LOOKBACK, 0)],
         dtype=np.float32
@@ -207,9 +207,7 @@ def proses_semua():
     satu_terakhir = deret_terakhir[-1]
     dua_terakhir = deret_terakhir[-2:]
 
-    # ==============================================
     # BOBOT GABUNGAN
-    # ==============================================
     BOBOT_LSTM   = 0.60
     BOBOT_MARKOV1 = 0.25
     BOBOT_MARKOV2 = 0.15
@@ -222,7 +220,7 @@ def proses_semua():
         "data_terbaru": data_terbaru_per_pasaran,
         "metode": f"LSTM {BOBOT_LSTM} + MARKOV1 {BOBOT_MARKOV1} + MARKOV2 {BOBOT_MARKOV2}",
         "seed": SEED_TETAP,
-        "pengaturan": f"LIMIT={LIMIT_DATA} | EPOCH=50 | BATCH=250",
+        "pengaturan": f"LIMIT={LIMIT_DATA} | EPOCH=50 | BATCH=250 | LSTM=32",
         "hasil": {}
     }
 
@@ -260,7 +258,7 @@ def proses_semua():
             print(f"   {nama:6} | 7D: {''.join(posisi_data[nama]['lima'])}  | 9D: {''.join(posisi_data[nama]['sembilan'])}")
         hasil_akhir["hasil"][p] = posisi_data
 
-    # === SIMPAN ===
+    # SIMPAN
     with open("hasil_prediksi.json", "w", encoding="utf-8") as f:
         json.dump(hasil_akhir, f, ensure_ascii=False, indent=2)
 
