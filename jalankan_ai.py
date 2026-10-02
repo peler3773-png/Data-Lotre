@@ -10,6 +10,12 @@ tf.get_logger().setLevel('ERROR')
 
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
 
+def gabungkan_hasil(daftar_7, daftar_9):
+    semua_digit = set('0123456789')
+    ada_di_9 = set(daftar_9)
+    hilang = sorted(semua_digit - ada_di_9)
+    return hilang + daftar_7  # hilang duluan, lalu 7 digit urutan asli
+
 def proses_semua():
     # === AMBIL DATA ===
     req = urllib.request.Request(DATA_UNDIAN_URL, headers={'User-Agent': 'Mozilla/5.0'})
@@ -78,16 +84,7 @@ def proses_semua():
     input_terbaru = np.array([d["angka"] for d in mentah_data[-lookback:]], dtype=np.float32)
     input_terbaru = np.expand_dims(input_terbaru, axis=0)
     
-    # === FUNGSI CARI DIGIT HILANG & GABUNGKAN ===
-    def gabungkan_hasil(daftar_7, daftar_9):
-        semua_digit = set('0123456789')
-        ada_di_9 = set(daftar_9)
-        hilang = sorted(semua_digit - ada_di_9)  # digit yang tidak ada di 9 digit
-        # Gabung: digit hilang + 7 digit asli (TIDAK diurutkan ulang)
-        hasil = hilang + daftar_7
-        return hasil
-    
-    # === PREDIKSI SEMUA PASARAN OTOMATIS ===
+    # === PREDIKSI SEMUA PASARAN ===
     hasil_akhir = {
         "diperbarui": __import__("datetime").datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "total_data": len(mentah_data),
@@ -104,17 +101,12 @@ def proses_semua():
         
         for idx_pos, nama in enumerate(nama_posisi):
             urut = np.argsort(pred[idx_pos][0])[::-1]
-            daftar_7 = [str(a) for a in urut[:7]]   # 7 digit, urutan asli dipertahankan
-            daftar_9 = [str(a) for a in urut[:9]]   # 9 digit untuk cek yang hilang
-            
-            # Proses gabung sesuai instruksi
-            gabungan = gabungkan_hasil(daftar_7, daftar_9)
+            daftar_7 = [str(a) for a in urut[:7]]
+            daftar_9 = [str(a) for a in urut[:9]]
+            gabung = gabungkan_hasil(daftar_7, daftar_9)
             
             posisi_data[nama] = {
-                "tujuh_asli": daftar_7,
-                "sembilan": daftar_9,
-                "digit_hilang": sorted(list(set('0123456789') - set(daftar_9))),
-                "gabung": gabungan  # INI HASIL AKHIR: [hilang] + [7 asli]
+                "gabung": "".join(gabung)  # Tanpa pemisah, langsung rapat
             }
         
         hasil_akhir["hasil"][p] = posisi_data
@@ -124,6 +116,11 @@ def proses_semua():
         json.dump(hasil_akhir, f, ensure_ascii=False, indent=2)
     
     print(f"✅ Selesai! Diproses: {len(list_pasaran)} pasaran → hasil_prediksi.json")
+    print("\n📋 CONTOH HASIL AKHIR:")
+    for p in list(list_pasaran[:3]):
+        print(f"\n{p}:")
+        for pos, val in hasil_akhir["hasil"][p].items():
+            print(f"  {pos}: {val['gabung']}")
 
 if __name__ == "__main__":
     proses_semua()
