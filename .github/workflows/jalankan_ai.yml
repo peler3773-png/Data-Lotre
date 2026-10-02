@@ -1,23 +1,33 @@
 name: Jalankan Prediksi AI
 on:
-  workflow_dispatch:  # Bisa diklik manual
+  workflow_dispatch:  # Bisa diklik langsung dari halaman GitHub
   schedule:
-    - cron: '0 */6 * * *'  # Setiap 6 jam otomatis
+    - cron: '0 */6 * * *'  # Diperbarui tiap 6 jam otomatis
 
 jobs:
   jalankan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Pasang Python & Library
+      - name: Ambil Semua File
+        uses: actions/checkout@v4
+
+      - name: Siapkan Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Pasang Library
         run: |
-          pip install numpy tensorflow
-      - name: Jalankan AI
+          python -m pip install --upgrade pip
+          pip install numpy tensorflow-cpu
+
+      - name: Jalankan AI LSTM
         run: python jalankan_ai.py
-      - name: Simpan Hasil
+
+      - name: Simpan Hasil ke GitHub
         run: |
-          git config --global user.name "github-actions[bot]"
-          git config --global user.email "actions@github.com"
+          git config --global user.name "peler3773-png"
+          git config --global user.email "peler3773@users.noreply.github.com"
           git add hasil_prediksi.json
-          git commit -m "🤖 Update hasil prediksi $(date +'%Y-%m-%d %H:%M')" || true
+          git commit -m "🤖 Update hasil prediksi $(date +'%Y-%m-%d %H:%M')" || exit 0
           git push
