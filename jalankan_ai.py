@@ -21,7 +21,7 @@ from tensorflow.keras.layers import LSTM, Dense, Input, Embedding, Flatten, conc
 tf.get_logger().setLevel('ERROR')
 
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
-LOOKBACK = 35
+LOOKBACK = 10
 LIMIT_DATA = 80000
 
 def proses_semua():
