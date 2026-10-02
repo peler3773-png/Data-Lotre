@@ -1,4 +1,4 @@
-# jalankan_ai.py — LOOKBACK Per Pasaran + Lewati Hari Libur
+# jalankan_ai.py — LOOKBACK Per Pasaran + Lewati Hari Libur (TELAH DIPERBAIKI)
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
@@ -45,7 +45,6 @@ def proses_semua():
 
     mentah_data = []
     semua_pasaran = set()
-
     for baris in isi_file.strip().splitlines():
         bagian = baris.split('|')
         if len(bagian) < 3:
@@ -61,13 +60,15 @@ def proses_semua():
             })
             semua_pasaran.add(pasaran)
 
+    # Urutkan berdasarkan tanggal agar urutan waktu benar
+    mentah_data.sort(key=lambda x: x["tanggal"])
+
     if len(mentah_data) > LIMIT_DATA:
         mentah_data = mentah_data[-LIMIT_DATA:]
 
     list_pasaran = sorted(semua_pasaran)
     pasaran_ke_idx = {p: i for i, p in enumerate(list_pasaran)}
     total_jenis_pasaran = len(list_pasaran)
-
     print(f"📊 [{datetime.now().strftime('%H:%M:%S')}] Ditemukan {total_jenis_pasaran} pasaran")
 
     # === Saring data: LEWATI HARI LIBUR ===
@@ -76,23 +77,23 @@ def proses_semua():
         aturan = JADWAL_LIBUR.get(p, {"libur": [], "lookback": DEFAULT_LOOKBACK})
         libur_p = aturan["libur"]
         lb_p = aturan["lookback"]
-
         daftar = []
         for rec in mentah_data:
             if rec["pasaran"] == p:
                 hari = nama_hari(rec["tanggal"])
                 if hari and hari not in libur_p:
                     daftar.append(rec)
-
         data_bersih[p] = {
             "daftar": daftar,
             "lookback": lb_p
         }
+        print(f"  {p}: tersedia {len(daftar)} rekaman (lookback={lb_p})")
 
-    # === BANGUN MODEL ===
+    # === BANGUN MODEL — input shape dinamis per pasaran ===
     from tensorflow.keras.models import Model
     from tensorflow.keras.layers import LSTM, Dense, Input, Embedding, Flatten, concatenate
 
+    # Input dengan panjang urutan dinamis
     input_angka = Input(shape=(None, 4), name='input_angka')
     lstm_layer = LSTM(64, activation='relu', return_sequences=False)(input_angka)
 
@@ -111,19 +112,15 @@ def proses_semua():
     model = Model(inputs=[input_angka, input_pasaran], outputs=[out_as, out_kop, out_kep, out_eko])
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
 
-    # === SUSUN DATA LATIHAN ===
+    # === SUSUN DATA LATIHAN — per pasaran dengan lookback masing-masing ===
     X_list, Xp_list, Y_as, Y_kop, Y_kep, Y_eko = [], [], [], [], [], []
-    min_lb = min(d["lookback"] for d in data_bersih.values())
-
     for p in list_pasaran:
         df = data_bersih[p]["daftar"]
         lb = data_bersih[p]["lookback"]
         idx = pasaran_ke_idx[p]
-
-        if len(df) < lb:
-            print(f"⚠️ {p}: butuh {lb} data, tersedia {len(df)}")
+        if len(df) < lb + 1:  # butuh minimal lb riwayat + 1 target
+            print(f"⚠️ {p}: butuh minimal {lb+1} data, tersedia {len(df)} → dilewati")
             continue
-
         for i in range(len(df) - lb):
             urutan = [df[j]["angka"] for j in range(i, i + lb)]
             target = df[i + lb]["angka"]
@@ -135,10 +132,11 @@ def proses_semua():
             Y_eko.append(target[3])
 
     if not X_list:
-        print("❌ Tidak ada data latihan cukup!")
+        print("❌ Tidak ada data latihan yang cukup!")
         return
 
-    X_angka = np.array([x[-min_lb:] for x in X_list], dtype=np.float32)
+    # Karena panjang urutan bervariasi, konversi ke numpy array langsung
+    X_angka = np.array(X_list, dtype=np.float32)
     X_konteks = np.array(Xp_list, dtype=np.int32)
     y_train = [
         np.array(Y_as),
@@ -147,8 +145,7 @@ def proses_semua():
         np.array(Y_eko)
     ]
 
-    # === LATIH ===
-    print(f"🧠 [{datetime.now().strftime('%H:%M:%S')}] Melatih model...")
+    print(f"🧠 [{datetime.now().strftime('%H:%M:%S')}] Melatih model dengan {len(X_list)} sampel...")
     model.fit(
         {'input_angka': X_angka, 'input_pasaran': X_konteks},
         y_train,
@@ -164,7 +161,6 @@ def proses_semua():
         "daftar_pasaran": list_pasaran,
         "hasil": {}
     }
-
     nama_posisi = ["AS", "KOP", "KEPALA", "EKOR"]
 
     for p in list_pasaran:
@@ -173,7 +169,7 @@ def proses_semua():
         idx_target = np.array([pasaran_ke_idx[p]])
 
         if len(df) < lb:
-            hasil_akhir["hasil"][p] = {"keterangan": "Data belum cukup", "lookback": lb}
+            hasil_akhir["hasil"][p] = {"keterangan": "Data belum cukup", "lookback_digunakan": lb}
             continue
 
         urutan_terbaru = np.array(
@@ -181,7 +177,6 @@ def proses_semua():
             dtype=np.float32
         )
         input_terbaru = np.expand_dims(urutan_terbaru, axis=0)
-
         pred = model.predict(
             {'input_angka': input_terbaru, 'input_pasaran': idx_target},
             verbose=0
@@ -189,20 +184,19 @@ def proses_semua():
 
         posisi_data = {}
         for idx_pos, nama in enumerate(nama_posisi):
-            urut = np.argsort(pred[idx_pos][0])[::-1].tolist()
-            sembilan = urut[:9]
-            satu_hilang = urut[9]
-            tujuh = urut[:8] + [satu_hilang]
-
+            # Urutkan dari probabilitas tertinggi ke terendah
+            urut = np.argsort(-pred[idx_pos][0]).tolist()
+            # 5 angka teratas, 9 angka teratas
+            lima = [str(a) for a in urut[:5]]
+            sembilan = [str(a) for a in urut[:9]]
             posisi_data[nama] = {
-                "lima": [str(a) for a in tujuh],
-                "sembilan": [str(a) for a in sembilan]
+                "lima": lima,
+                "sembilan": sembilan
             }
-
         posisi_data["lookback_digunakan"] = lb
         hasil_akhir["hasil"][p] = posisi_data
 
-    # === SIMPAN ===
+    # === SIMPAN HASIL ===
     with open("hasil_prediksi.json", "w", encoding="utf-8") as f:
         json.dump(hasil_akhir, f, ensure_ascii=False, indent=2)
 
