@@ -1,41 +1,22 @@
-# jalankan_ai.py — LOOKBACK Per Pasaran + Lewati Hari Libur
+# jalankan_ai.py — Epochs 75 + Batch 512 + Perbaikan Error
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 import numpy as np
 import urllib.request
 import json
 from datetime import datetime
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import LSTM, Dense, Input, Embedding, Flatten, concatenate
 import tensorflow as tf
+
 tf.get_logger().setLevel('ERROR')
 
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
+LOOKBACK = 10
 LIMIT_DATA = 80000
 
-# === ATURAN JADWAL LIBUR & LOOKBACK ===
-JADWAL_LIBUR = {
-    "PS":   {"libur": ["Minggu"],          "lookback": 18},
-    "SGP":  {"libur": ["Selasa", "Jumat"], "lookback": 15},
-    "TXM":  {"libur": ["Minggu"],          "lookback": 18},
-    "TM":   {"libur": ["Minggu"],          "lookback": 18},
-    "TMD":  {"libur": ["Senin"],           "lookback": 18},
-    "TXD":  {"libur": ["Senin"],           "lookback": 18},
-    "TXE":  {"libur": ["Senin"],           "lookback": 18},
-    "TXN":  {"libur": ["Senin"],           "lookback": 18},
-    "WV":   {"libur": ["Senin"],           "lookback": 18},
-    "SCM":  {"libur": ["Minggu"],          "lookback": 18},
-}
-DEFAULT_LOOKBACK = 21
-
-def nama_hari(tanggal_str):
-    hari_list = ["Senin", "Selasa", "Rabu", "Kamis", "Jumat", "Sabtu", "Minggu"]
-    try:
-        dt = datetime.strptime(tanggal_str, "%Y-%m-%d")
-        return hari_list[dt.weekday()]
-    except:
-        return None
-
 def proses_semua():
-    # === AMBIL DATA ===
+    # === AMBIL DATA — PERBAIKAN: timeout dipindah ke urlopen ===
     req = urllib.request.Request(
         DATA_UNDIAN_URL,
         headers={'User-Agent': 'Mozilla/5.0'}
@@ -51,12 +32,10 @@ def proses_semua():
         if len(bagian) < 3:
             continue
         pasaran = bagian[0].strip().upper()
-        tanggal = bagian[1].strip()
         angka_4d = bagian[2].strip()
         if len(angka_4d) == 4 and angka_4d.isdigit():
             mentah_data.append({
                 "pasaran": pasaran,
-                "tanggal": tanggal,
                 "angka": [int(d) for d in angka_4d]
             })
             semua_pasaran.add(pasaran)
@@ -70,30 +49,8 @@ def proses_semua():
 
     print(f"📊 [{datetime.now().strftime('%H:%M:%S')}] Ditemukan {total_jenis_pasaran} pasaran")
 
-    # === Saring data: LEWATI HARI LIBUR ===
-    data_bersih = {}
-    for p in list_pasaran:
-        aturan = JADWAL_LIBUR.get(p, {"libur": [], "lookback": DEFAULT_LOOKBACK})
-        libur_p = aturan["libur"]
-        lb_p = aturan["lookback"]
-
-        daftar = []
-        for rec in mentah_data:
-            if rec["pasaran"] == p:
-                hari = nama_hari(rec["tanggal"])
-                if hari and hari not in libur_p:
-                    daftar.append(rec)
-
-        data_bersih[p] = {
-            "daftar": daftar,
-            "lookback": lb_p
-        }
-
-    # === BANGUN MODEL ===
-    from tensorflow.keras.models import Model
-    from tensorflow.keras.layers import LSTM, Dense, Input, Embedding, Flatten, concatenate
-
-    input_angka = Input(shape=(None, 4), name='input_angka')
+    # === BANGUN MODEL LSTM ===
+    input_angka = Input(shape=(LOOKBACK, 4), name='input_angka')
     lstm_layer = LSTM(64, activation='relu', return_sequences=False)(input_angka)
 
     input_pasaran = Input(shape=(1,), name='input_pasaran')
@@ -111,53 +68,41 @@ def proses_semua():
     model = Model(inputs=[input_angka, input_pasaran], outputs=[out_as, out_kop, out_kep, out_eko])
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
 
-    # === SUSUN DATA LATIHAN ===
-    X_list, Xp_list, Y_as, Y_kop, Y_kep, Y_eko = [], [], [], [], [], []
-    min_lb = min(d["lookback"] for d in data_bersih.values())
-
-    for p in list_pasaran:
-        df = data_bersih[p]["daftar"]
-        lb = data_bersih[p]["lookback"]
-        idx = pasaran_ke_idx[p]
-
-        if len(df) < lb:
-            print(f"⚠️ {p}: butuh {lb} data, tersedia {len(df)}")
-            continue
-
-        for i in range(len(df) - lb):
-            urutan = [df[j]["angka"] for j in range(i, i + lb)]
-            target = df[i + lb]["angka"]
-            X_list.append(urutan)
-            Xp_list.append(idx)
-            Y_as.append(target[0])
-            Y_kop.append(target[1])
-            Y_kep.append(target[2])
-            Y_eko.append(target[3])
-
-    if not X_list:
-        print("❌ Tidak ada data latihan cukup!")
+    # === SIAPKAN DATA ===
+    total_sampel = len(mentah_data) - LOOKBACK
+    if total_sampel < 1:
+        print("⚠️ Data belum cukup!")
         return
 
-    X_angka = np.array([x[-min_lb:] for x in X_list], dtype=np.float32)
-    X_konteks = np.array(Xp_list, dtype=np.int32)
-    y_train = [
-        np.array(Y_as),
-        np.array(Y_kop),
-        np.array(Y_kep),
-        np.array(Y_eko)
-    ]
+    X_angka = np.zeros((total_sampel, LOOKBACK, 4), dtype=np.float32)
+    X_konteks = np.zeros(total_sampel, dtype=np.int32)
+    Y = np.zeros((total_sampel, 4), dtype=np.int32)
 
-    # === LATIH ===
+    for i in range(total_sampel):
+        X_angka[i] = [mentah_data[j]["angka"] for j in range(i, i + LOOKBACK)]
+        X_konteks[i] = pasaran_ke_idx[mentah_data[i + LOOKBACK]["pasaran"]]
+        Y[i] = mentah_data[i + LOOKBACK]["angka"]
+
+    y_train = [Y[:, 0], Y[:, 1], Y[:, 2], Y[:, 3]]
+
+    # === LATIH MODEL — EPOCHS 75, BATCH 512 ===
     print(f"🧠 [{datetime.now().strftime('%H:%M:%S')}] Melatih model...")
     model.fit(
         {'input_angka': X_angka, 'input_pasaran': X_konteks},
         y_train,
-        epochs=64,
+        epochs=75,
         batch_size=512,
         verbose=0
     )
 
-    # === PREDIKSI TIAP PASARAN ===
+    # === DATA TERBARU ===
+    input_terbaru = np.array(
+        [mentah_data[j]["angka"] for j in range(-LOOKBACK, 0)],
+        dtype=np.float32
+    )
+    input_terbaru = np.expand_dims(input_terbaru, axis=0)
+
+    # === PREDIKSI DENGAN ATURAN ===
     hasil_akhir = {
         "diperbarui": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "total_data": len(mentah_data),
@@ -168,38 +113,21 @@ def proses_semua():
     nama_posisi = ["AS", "KOP", "KEPALA", "EKOR"]
 
     for p in list_pasaran:
-        df = data_bersih[p]["daftar"]
-        lb = data_bersih[p]["lookback"]
         idx_target = np.array([pasaran_ke_idx[p]])
-
-        if len(df) < lb:
-            hasil_akhir["hasil"][p] = {"keterangan": "Data belum cukup", "lookback": lb}
-            continue
-
-        urutan_terbaru = np.array(
-            [rec["angka"] for rec in df[-lb:]],
-            dtype=np.float32
-        )
-        input_terbaru = np.expand_dims(urutan_terbaru, axis=0)
-
-        pred = model.predict(
-            {'input_angka': input_terbaru, 'input_pasaran': idx_target},
-            verbose=0
-        )
-
+        pred = model.predict({'input_angka': input_terbaru, 'input_pasaran': idx_target}, verbose=0)
         posisi_data = {}
+
         for idx_pos, nama in enumerate(nama_posisi):
             urut = np.argsort(pred[idx_pos][0])[::-1].tolist()
             sembilan = urut[:9]
             satu_hilang = urut[9]
-            tujuh = urut[:8] + [satu_hilang]
+            tujuh = urut[:6] + [satu_hilang]
 
             posisi_data[nama] = {
                 "lima": [str(a) for a in tujuh],
                 "sembilan": [str(a) for a in sembilan]
             }
 
-        posisi_data["lookback_digunakan"] = lb
         hasil_akhir["hasil"][p] = posisi_data
 
     # === SIMPAN ===
