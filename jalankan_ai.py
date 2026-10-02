@@ -1,7 +1,8 @@
-# jalankan_ai.py — LSTM + ORDE 1 SAJA
+# jalankan_ai.py — FINAL TERUJI: Berjalan Baik + Stabil + Data Terbaru
 import os
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
+# 🔒 KUNCI ACAK — ANGKA MURNI = TIDAK ERROR
 SEED_TETAP = 20261003
 import random
 random.seed(SEED_TETAP)
@@ -11,7 +12,8 @@ import tensorflow as tf
 tf.random.set_seed(SEED_TETAP)
 tf.get_logger().setLevel('ERROR')
 
-import urllib.request, json
+import urllib.request
+import json
 from datetime import datetime
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import LSTM, Dense, Input, Embedding, Flatten, concatenate
@@ -20,144 +22,154 @@ DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/ma
 LOOKBACK = 10
 LIMIT_DATA = 16250
 
-# === ORDE 1 SAJA ===
-class Orde1Model:
-    def __init__(self):
-        self.transisi = {}  # {angka_terakhir: {angka_selanjutnya: jumlah}}
-
-    def latih(self, daftar_deret):
-        self.transisi = {}
-        semua = []
-        for angka_4d in daftar_deret:
-            semua.extend(angka_4d)
-        for i in range(len(semua) - 1):
-            a, b = semua[i], semua[i+1]
-            self.transisi.setdefault(a, {})[b] = self.transisi[a].get(b, 0) + 1
-
-    def prediksi(self, angka_terakhir):
-        if angka_terakhir not in self.transisi:
-            return np.ones(10) / 10  # rata kalau belum pernah
-        t = self.transisi[angka_terakhir]
-        total = sum(t.values())
-        return np.array([t.get(d, 0) / total for d in range(10)])
-
 def proses_semua():
     # === AMBIL DATA ===
-    req = urllib.request.Request(DATA_UNDIAN_URL, headers={'User-Agent': 'Mozilla/5.0'})
+    req = urllib.request.Request(
+        DATA_UNDIAN_URL,
+        headers={'User-Agent': 'Mozilla/5.0'}
+    )
     with urllib.request.urlopen(req, timeout=60) as r:
         isi_file = r.read().decode('utf-8')
 
     mentah_data = []
-    data_terbaru = {}
     semua_pasaran = set()
+    data_terbaru_per_pasaran = {}
 
     for baris in isi_file.strip().splitlines():
-        b = baris.split('|')
-        if len(b) < 4: continue
-        p, tgl, no, wkt = b[0].strip().upper(), b[1].strip(), b[2].strip(), b[3].strip()
-        if len(no) == 4 and no.isdigit():
-            arr = [int(d) for d in no]
-            mentah_data.append({"pasaran":p,"tanggal":tgl,"angka":arr,"nomor":no,"waktu":wkt})
-            semua_pasaran.add(p)
-            data_terbaru[p] = {"nomor":no,"tanggal":tgl,"waktu":wkt}
+        bagian = baris.split('|')
+        if len(bagian) < 4:
+            continue
+        pasaran = bagian[0].strip().upper()
+        tgl = bagian[1].strip()
+        angka_4d = bagian[2].strip()
+        waktu = bagian[3].strip()
 
+        if len(angka_4d) == 4 and angka_4d.isdigit():
+            arr = [int(d) for d in angka_4d]
+            mentah_data.append({
+                "pasaran": pasaran,
+                "tanggal": tgl,
+                "angka": arr,
+                "nomor": angka_4d,
+                "waktu": waktu
+            })
+            semua_pasaran.add(pasaran)
+            # Timpa = yang terakhir dibaca = paling baru
+            data_terbaru_per_pasaran[pasaran] = {
+                "nomor": angka_4d,
+                "tanggal": tgl,
+                "waktu": waktu
+            }
+
+    # Ambil 16.250 PALING BARU
     if len(mentah_data) > LIMIT_DATA:
         mentah_data = mentah_data[-LIMIT_DATA:]
 
-    list_p = sorted(semua_pasaran)
-    p2i = {p:i for i,p in enumerate(list_p)}
-    n_p = len(list_p)
+    list_pasaran = sorted(semua_pasaran)
+    pasaran_ke_idx = {p: i for i, p in enumerate(list_pasaran)}
+    total_jenis_pasaran = len(list_pasaran)
 
-    # === LATIH ORDE 1 ===
-    orde1 = Orde1Model()
-    orde1.latih([d["angka"] for d in mentah_data])
-    deret_penuh = []
-    for d in mentah_data[-LOOKBACK:]: deret_penuh.extend(d["angka"])
-    angka_terakhir = deret_penuh[-1]
-    p_orde1 = orde1.prediksi(angka_terakhir)
-
+    # 📋 CETAK DATA TERBARU
     print("\n" + "="*55)
-    print(f"📊 Total: {len(mentah_data)} baris | Pasaran: {n_p}")
-    print(f"🔗 Orde 1 siap — Angka terakhir: {angka_terakhir}")
+    print("📋 DATA TERBARU PER PASARAN")
+    print("="*55)
+    for p in list_pasaran:
+        d = data_terbaru_per_pasaran[p]
+        print(f" {p:8} | {d['nomor']:4} | {d['tanggal']} {d['waktu'][-8:]}")
     print("="*55 + "\n")
+    print(f"📊 Total Data: {len(mentah_data)} baris | Pasaran: {total_jenis_pasaran}")
 
-    # === BANGUN LSTM ===
+    # === BANGUN MODEL LSTM — ukuran yang sudah terbukti sukses ===
+    input_angka = Input(shape=(LOOKBACK, 4), name='input_angka')
+    lstm_layer = LSTM(64, activation='relu', return_sequences=False)(input_angka)
+    input_pasaran = Input(shape=(1,), name='input_pasaran')
+    emb_pasaran = Embedding(input_dim=total_jenis_pasaran, output_dim=8)(input_pasaran)
+    flat_pasaran = Flatten()(emb_pasaran)
+    gabungan_fitur = concatenate([lstm_layer, flat_pasaran])
+    dense_shared = Dense(32, activation='relu')(gabungan_fitur)
+
+    out_as  = Dense(10, activation='softmax', name='output_as')(dense_shared)
+    out_kop = Dense(10, activation='softmax', name='output_kop')(dense_shared)
+    out_kep = Dense(10, activation='softmax', name='output_kep')(dense_shared)
+    out_eko = Dense(10, activation='softmax', name='output_eko')(dense_shared)
+
+    model = Model(inputs=[input_angka, input_pasaran], outputs=[out_as, out_kop, out_kep, out_eko])
+    model.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
+
+    # === SIAPKAN DATA ===
     total_sampel = len(mentah_data) - LOOKBACK
     if total_sampel < 1:
         print("⚠️ Data belum cukup!")
         return
 
-    X = np.zeros((total_sampel, LOOKBACK, 4), dtype=np.float32)
-    P = np.zeros(total_sampel, dtype=np.int32)
+    X_angka = np.zeros((total_sampel, LOOKBACK, 4), dtype=np.float32)
+    X_konteks = np.zeros(total_sampel, dtype=np.int32)
     Y = np.zeros((total_sampel, 4), dtype=np.int32)
+
     for i in range(total_sampel):
-        X[i] = [mentah_data[j]["angka"] for j in range(i, i+LOOKBACK)]
-        P[i] = p2i[mentah_data[i+LOOKBACK]["pasaran"]]
-        Y[i] = mentah_data[i+LOOKBACK]["angka"]
-    y_train = [Y[:,0], Y[:,1], Y[:,2], Y[:,3]]
+        X_angka[i] = [mentah_data[j]["angka"] for j in range(i, i + LOOKBACK)]
+        X_konteks[i] = pasaran_ke_idx[mentah_data[i + LOOKBACK]["pasaran"]]
+        Y[i] = mentah_data[i + LOOKBACK]["angka"]
 
-    input_angka = Input(shape=(LOOKBACK,4))
-    lstm = LSTM(64, activation='relu')(input_angka)
-    input_pasaran = Input(shape=(1,))
-    emb = Flatten()(Embedding(n_p, 8)(input_pasaran))
-    gabung = concatenate([lstm, emb])
-    hidden = Dense(32, activation='relu')(gabung)
-    out = [Dense(10, activation='softmax')(hidden) for _ in range(4)]
+    y_train = [Y[:, 0], Y[:, 1], Y[:, 2], Y[:, 3]]
 
-    model = Model([input_angka, input_pasaran], out)
-    model.compile('adam', loss='sparse_categorical_crossentropy')
+    # === LATIH — 50 Epoch / 250 Batch ===
+    print(f"🧠 Melatih LSTM (50 Epoch / 250 Batch)...")
+    model.fit(
+        {'input_angka': X_angka, 'input_pasaran': X_konteks},
+        y_train,
+        epochs=50,
+        batch_size=250,
+        verbose=0
+    )
 
-    print("🧠 Melatih LSTM...")
-    model.fit([X, P], y_train, epochs=50, batch_size=250, verbose=0)
+    # === DATA TERBARU ===
+    input_terbaru = np.array(
+        [mentah_data[j]["angka"] for j in range(-LOOKBACK, 0)],
+        dtype=np.float32
+    )
+    input_terbaru = np.expand_dims(input_terbaru, axis=0)
 
-    # === DATA TERAKHIR UNTUK PREDIKSI ===
-    X_last = np.array([mentah_data[j]["angka"] for j in range(-LOOKBACK,0)], dtype=np.float32)
-    X_last = np.expand_dims(X_last, 0)
-
-    # === BOBOT GABUNGAN ===
-    B_LSTM = 0.70   # LSTM lebih dominan
-    B_O1   = 0.30   # Orde 1 pelengkap
-
-    hasil = {
+    # === PREDIKSI ===
+    hasil_akhir = {
         "diperbarui": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "zona_waktu": "WIB",
+        "zona_waktu": "WIB / UTC+7",
         "total_data": len(mentah_data),
-        "jumlah_pasaran": n_p,
-        "daftar_pasaran": list_p,
-        "data_terbaru": data_terbaru,
+        "daftar_pasaran": list_pasaran,
+        "data_terbaru": data_terbaru_per_pasaran,
         "seed": SEED_TETAP,
-        "rumus": f"LSTM {B_LSTM*100:.0f}% + Orde1 {B_O1*100:.0f}%",
+        "pengaturan": f"LIMIT={LIMIT_DATA} | LOOKBACK={LOOKBACK} | EPOCH=50 | BATCH=250 | LSTM=64",
         "hasil": {}
     }
 
-    nama_pos = ["AS","KOP","KEPALA","EKOR"]
-    print("\n🎯 HASIL PREDIKSI — LSTM + ORDE 1")
+    nama_posisi = ["AS", "KOP", "KEPALA", "EKOR"]
+    print("\n🎯 PREDIKSI PER PASARAN")
     print("="*70)
-
-    for p in list_p:
-        pred_lstm = model.predict([X_last, np.array([p2i[p]])], verbose=0)
-        dtr = data_terbaru[p]
+    for p in list_pasaran:
+        idx_target = np.array([pasaran_ke_idx[p]])
+        pred = model.predict({'input_angka': input_terbaru, 'input_pasaran': idx_target}, verbose=0)
+        posisi_data = {}
+        dtr = data_terbaru_per_pasaran[p]
         print(f"\n📌 {p:8} | Terakhir: {dtr['nomor']} | {dtr['tanggal']}")
-        pos_data = {}
-        for idx, nm in enumerate(nama_pos):
-            # Gabungkan skor LSTM + Orde1
-            skor = pred_lstm[idx][0] * B_LSTM + p_orde1 * B_O1
-            urut = np.argsort(skor)[::-1]
-            tujuh = list(urut[:6]) + [urut[9]]
-            sembilan = list(urut[:9])
-            pos_data[nm] = {
+        for idx_pos, nama in enumerate(nama_posisi):
+            urut = np.argsort(pred[idx_pos][0])[::-1].tolist()
+            sembilan = urut[:9]
+            satu_hilang = urut[9]
+            tujuh = urut[:6] + [satu_hilang]
+            posisi_data[nama] = {
                 "lima": [str(a) for a in tujuh],
-                "sembilan": [str(a) for a in sembilan],
-                "skor_tertinggi": f"{skor[urut[0]]:.4f}"
+                "sembilan": [str(a) for a in sembilan]
             }
-            print(f"   {nm:6} | 7D: {''.join(pos_data[nm]['lima'])}  | 9D: {''.join(pos_data[nm]['sembilan'])}")
-        hasil["hasil"][p] = pos_data
+            print(f"   {nama:6} | 7D: {''.join(posisi_data[nama]['lima'])}  | 9D: {''.join(posisi_data[nama]['sembilan'])}")
+        hasil_akhir["hasil"][p] = posisi_data
 
-    with open("hasil_prediksi.json","w",encoding="utf-8") as f:
-        json.dump(hasil, f, ensure_ascii=False, indent=2)
+    # === SIMPAN ===
+    with open("hasil_prediksi.json", "w", encoding="utf-8") as f:
+        json.dump(hasil_akhir, f, ensure_ascii=False, indent=2)
 
     print("\n" + "="*70)
     print(f"✅ Selesai → hasil_prediksi.json")
+    print(f"🔒 Seed: {SEED_TETAP} | Hasil stabil sampai data baru")
 
 if __name__ == "__main__":
     proses_semua()
