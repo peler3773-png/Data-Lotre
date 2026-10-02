@@ -13,7 +13,7 @@ tf.get_logger().setLevel('ERROR')
 
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
 LOOKBACK = 10
-LIMIT_DATA = 80000
+LIMIT_DATA = 16250
 
 def proses_semua():
     # === AMBIL DATA — PERBAIKAN: timeout dipindah ke urlopen ===
@@ -90,8 +90,8 @@ def proses_semua():
     model.fit(
         {'input_angka': X_angka, 'input_pasaran': X_konteks},
         y_train,
-        epochs=75,
-        batch_size=512,
+        epochs=50,
+        batch_size=250,
         verbose=0
     )
 
