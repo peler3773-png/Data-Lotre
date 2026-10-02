@@ -22,7 +22,7 @@ tf.get_logger().setLevel('ERROR')
 
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
 LOOKBACK = 10
-LIMIT_DATA = 80000
+LIMIT_DATA = 10000
 
 # ==============================================
 # MODUL MARKOV ORDE 1 & ORDE 2
