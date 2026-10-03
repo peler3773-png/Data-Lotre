@@ -155,7 +155,7 @@ def proses_semua():
             urut = np.argsort(pred[idx_pos][0])[::-1].tolist()
             sembilan = urut[:9]
             satu_hilang = urut[9]
-            tujuh = urut[:6] + [satu_hilang]
+            tujuh = urut[:7] + [satu_hilang]
             posisi_data[nama] = {
                 "lima": [str(a) for a in tujuh],
                 "sembilan": [str(a) for a in sembilan]
