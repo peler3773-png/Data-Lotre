@@ -30,11 +30,9 @@ def proses_semua():
     )
     with urllib.request.urlopen(req, timeout=60) as r:
         isi_file = r.read().decode('utf-8')
-
     mentah_data = []
     semua_pasaran = set()
     data_terbaru_per_pasaran = {}
-
     for baris in isi_file.strip().splitlines():
         bagian = baris.split('|')
         if len(bagian) < 4:
@@ -43,7 +41,6 @@ def proses_semua():
         tgl = bagian[1].strip()
         angka_4d = bagian[2].strip()
         waktu = bagian[3].strip()
-
         if len(angka_4d) == 4 and angka_4d.isdigit():
             arr = [int(d) for d in angka_4d]
             mentah_data.append({
@@ -54,14 +51,18 @@ def proses_semua():
                 "waktu": waktu
             })
             semua_pasaran.add(pasaran)
-            # Timpa = yang terakhir dibaca = paling baru
+            # Timpa = yang terakhir dibaca = paling baru di file
             data_terbaru_per_pasaran[pasaran] = {
                 "nomor": angka_4d,
                 "tanggal": tgl,
                 "waktu": waktu
             }
 
-    # Ambil 16.250 PALING BARU
+    # ✅ TAMBAHKAN INI — BALIK URUTAN DULU
+    mentah_data = mentah_data[::-1]
+    # Sekarang: awal = terlama, akhir = PALING BARU
+
+    # ✅ BARU ambil 16.250 PALING BARU dari ujung kanan
     if len(mentah_data) > LIMIT_DATA:
         mentah_data = mentah_data[-LIMIT_DATA:]
 
@@ -157,10 +158,10 @@ def proses_semua():
             satu_hilang = urut[9]
             tujuh = urut[:7] + [satu_hilang]
             posisi_data[nama] = {
-                "lima": [str(a) for a in tujuh],
+                "tujuh": [str(a) for a in tujuh],
                 "sembilan": [str(a) for a in sembilan]
             }
-            print(f"   {nama:6} | 7D: {''.join(posisi_data[nama]['lima'])}  | 9D: {''.join(posisi_data[nama]['sembilan'])}")
+            print(f"   {nama:8} | 8D: {''.join(posisi_data[nama]['tujuh'])}  | 9D: {''.join(posisi_data[nama]['sembilan'])}")
         hasil_akhir["hasil"][p] = posisi_data
 
     # === SIMPAN ===
