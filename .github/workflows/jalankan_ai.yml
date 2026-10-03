@@ -2,7 +2,9 @@ name: Jalankan Prediksi AI
 on:
   workflow_dispatch:
   schedule:
-    - cron: '0 * * * *'   # SETIAP JAM PADA TEPAT JAM (UTC) → dikonversi ke WIB di bawah
+    # Tepat tiap jam 00:00 s/d 23:00 WIB
+    - cron: '0 17-23 * * *'   # 17-23 UTC → 00-07 WIB
+    - cron: '0 0-16 * * *'    # 00-16 UTC → 08-23 WIB
 jobs:
   jalankan:
     runs-on: ubuntu-latest
@@ -10,7 +12,7 @@ jobs:
     permissions:
       contents: write
     env:
-      TZ: Asia/Jakarta    # Semua log & pakai WIB
+      TZ: Asia/Jakarta
     steps:
       - name: Ambil File
         uses: actions/checkout@v4
