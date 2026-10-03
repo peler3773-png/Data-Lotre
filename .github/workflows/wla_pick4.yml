@@ -1,1 +1,18 @@
+# wla_pick4.yml — Konfigurasi LSTM Per Pasaran
+sumber:
+  pengaturan: "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/pengaturan.json"
+  data_undian: "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
 
+pengaturan_model:
+  urutan_waktu: 30
+  epoch: 100
+  batch_size: 16
+  test_split: 0.2
+  dropout: 0.2
+  unit_lstm1: 64
+  unit_lstm2: 32
+  unit_dense: 16
+  acak: 42  # seed reproducibilitas
+
+daftar_pasaran: []  # isi otomatis dari pengaturan.json
+pasaran_aktif: ["SD", "SGP", "HK", "PS"]  # pasaran yang diproses
