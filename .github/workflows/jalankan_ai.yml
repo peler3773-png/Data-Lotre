@@ -2,10 +2,10 @@ name: Jalankan Prediksi AI
 on:
   workflow_dispatch:
   schedule:
-    # UPDATE SETIAP 8 JAM — 3 Kali Sehari
     # WAKTU WIB: 07:00 | 15:00 | 23:00  ← pas tutup pasaran
-    # GitHub pakai UTC → WIB = UTC+7
-    - cron: '0 0,8,16 * * *'
+    # GitHub pakai UTC → WIB = UTC+7 → kurangi 7 jam
+    - cron: '0 0,8,16 * * *'  # ✅ 5 kolom, benar
+      timezone: 'Asia/Jakarta' # opsional, fitur baru GitHub
 jobs:
   jalankan:
     runs-on: ubuntu-latest
@@ -17,18 +17,22 @@ jobs:
     steps:
       - name: Ambil File
         uses: actions/checkout@v4
+        
       - name: Siapkan Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.11'
+          
       - name: Pasang Library
         run: |
           python -m pip install --upgrade pip setuptools wheel
           pip install numpy==1.26.4 \
                       tensorflow-cpu==2.15.0 \
                       optuna==3.6.1
+          
       - name: Jalankan AI
         run: python jalankan_ai.py
+        
       - name: Simpan Hasil
         run: |
           git config --global user.name "peler3773-png"
