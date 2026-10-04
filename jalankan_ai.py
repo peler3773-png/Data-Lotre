@@ -19,7 +19,7 @@ from tensorflow.keras.models import Model
 from tensorflow.keras.layers import LSTM, Dense, Input, Embedding, Flatten, concatenate
 
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
-LOOKBACK = 10
+LOOKBACK = 65
 LIMIT_DATA = 16250
 FAKTOR_OVERDUE = 0.40  # Naik maks 40% — bisa diatur 0.1~0.5
 
