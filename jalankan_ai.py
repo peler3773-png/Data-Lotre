@@ -37,9 +37,9 @@ MANUAL_EPOCH = 50
 MANUAL_BATCH = 32
 
 OPTUNA_EPOCH_MIN = 20
-OPTUNA_EPOCH_MAX = 80
-OPTUNA_BATCH_CHOICES = [16, 32, 64]
-OPTUNA_CUPIKAN = 10
+OPTUNA_EPOCH_MAX = 40
+OPTUNA_BATCH_CHOICES = [32]
+OPTUNA_CUPIKAN = 1
 
 def hitung_bobot_overdue(data_pasaran, posisi_idx):
     terakhir_muncul = {str(d): 999 for d in range(10)}
@@ -128,7 +128,7 @@ def cari_optuna(X, Y, Xv, Yv):
         epoch = trial.suggest_int('epoch', OPTUNA_EPOCH_MIN, OPTUNA_EPOCH_MAX)
         batch = trial.suggest_categorical('batch_size', OPTUNA_BATCH_CHOICES)
         m = bangun_model()
-        es = EarlyStopping(monitor='val_loss', patience=6, restore_best_weights=True)
+        es = EarlyStopping(monitor='val_loss', patience=2, restore_best_weights=True)
         h = m.fit(X, Y, epochs=epoch, batch_size=batch,
                   validation_data=(Xv, Yv), callbacks=[es], verbose=0)
         return min(h.history['val_loss'])
