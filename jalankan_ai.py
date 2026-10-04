@@ -36,7 +36,7 @@ def hitung_bobot_overdue(data_pasaran, posisi_idx):
         bobot[str(d)] = 1.0 + (j / max_jarak) * FAKTOR_OVERDUE
     return bobot
 
-# ⚡ ORDE 1 — sama dengan Overdue, fungsi terpisah agar mudah ubah
+# ⚡ ORDE 1 — sama logika, fungsi terpisah agar mudah ubah
 def hitung_bobot_orde1(data_pasaran, posisi_idx):
     terakhir_muncul = {str(d): 999 for d in range(10)}
     for urutan, baris in enumerate(reversed(data_pasaran)):
@@ -280,7 +280,7 @@ def proses_semua():
             }
 
     # === SIMPAN ===
-    nama_file = "monitor_lstm_ovd_orde1_orde2.json"
+    nama_file = "hasil_prediksi.json"
     with open(nama_file, "w", encoding="utf-8") as f:
         json.dump(hasil_akhir, f, ensure_ascii=False, indent=2)
 
