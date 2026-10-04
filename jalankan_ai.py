@@ -12,21 +12,20 @@ import tensorflow as tf
 tf.random.set_seed(SEED_TETAP)
 tf.get_logger().setLevel('ERROR')
 
-# Cek & pasang Optuna
+# === Cek Optuna SAJA — TIDAK instal otomatis lagi ===
 try:
     import optuna
 except ImportError:
-    print("📦 Menginstal Optuna...")
-    import subprocess
-    subprocess.check_call([sys.executable, "-m", "pip", "install", "optuna", "-q"])
-    import optuna
+    print("❌ ERROR: Pustaka 'optuna' belum terpasang!")
+    print("Pasang lewat workflow: pip install optuna")
+    sys.exit(1)
 
 import urllib.request
 import json
 from datetime import datetime
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import LSTM, Dense, Input
-from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
+from tensorflow.keras.callbacks import EarlyStopping
 
 # === PENGATURAN ===
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
@@ -34,15 +33,13 @@ LOOKBACK = 10
 LIMIT_PER_PASARAN = 2000
 FAKTOR_OVERDUE = 0.40
 
-# Nilai Manual
 MANUAL_EPOCH = 50
 MANUAL_BATCH = 32
 
-# Rentang pencarian Optuna
 OPTUNA_EPOCH_MIN = 20
 OPTUNA_EPOCH_MAX = 80
 OPTUNA_BATCH_CHOICES = [16, 32, 64]
-OPTUNA_CUPIKAN = 12  # Jumlah percobaan per pasaran
+OPTUNA_CUPIKAN = 10  # Dikurangi sedikit agar lebih cepat
 
 def hitung_bobot_overdue(data_pasaran, posisi_idx):
     terakhir_muncul = {str(d): 999 for d in range(10)}
@@ -87,8 +84,7 @@ def siapkan_data(dp):
         X[i] = [dp[j]['angka'] for j in range(i, i + LOOKBACK)]
         Y[i] = dp[i + LOOKBACK]['angka']
     y_output = [Y[:, 0], Y[:, 1], Y[:, 2], Y[:, 3]]
-    # Bagi latih 90% + validasi 10%
-    batas = int(0.9 * sampel)
+    batas = max(LOOKBACK + 1, int(0.9 * sampel))  # Minimal data validasi
     return X[:batas], y_output[:], X[batas:], y_output[:], batas
 
 def latih_manual(X, Y, Xv, Yv):
@@ -118,20 +114,20 @@ def cari_optuna(X, Y, Xv, Yv):
     study = optuna.create_study(direction='minimize')
     study.optimize(tujuan, n_trials=OPTUNA_CUPIKAN, show_progress_bar=False)
     bp = study.best_params
-    # Latih ulang dengan nilai terbaik
+    
     es = EarlyStopping(monitor='val_loss', patience=6, restore_best_weights=True)
     model = bangun_model()
     model.fit(X, Y, epochs=bp['epoch'], batch_size=bp['batch_size'],
               validation_data=(Xv, Yv), callbacks=[es], verbose=0)
-    return model, {"epoch": bp['epoch'], "batch_size": bp['batch_size'], "skor_terbaik": study.best_value}
+    return model, {"epoch": bp['epoch'], "batch_size": bp['batch_size'], "skor_terbaik": round(study.best_value, 6)}
 
 def proses_semua():
-    # Baca data
+    print("📥 Membaca data...")
     req = urllib.request.Request(
         DATA_UNDIAN_URL,
         headers={'User-Agent': 'Mozilla/5.0'}
     )
-    with urllib.request.urlopen(req, timeout=60) as r:
+    with urllib.request.urlopen(req, timeout=120) as r:
         isi_file = r.read().decode('utf-8')
     
     mentah_data = []
@@ -149,6 +145,17 @@ def proses_semua():
                 "waktu": bagian[3].strip()
             })
     
+    # ✅ HAPUS DUPLIKAT: pasaran + tanggal = unik
+    dilihat = set()
+    bersih = []
+    for entri in mentah_data:
+        kunci = (entri['pasaran'], entri['tanggal'])
+        if kunci not in dilihat:
+            dilihat.add(kunci)
+            bersih.append(entri)
+    mentah_data = bersih
+    
+    # Urutkan: lama → baru
     mentah_data.sort(key=lambda x: (x['tanggal'], x['waktu']))
     
     # Pisah per pasaran
@@ -159,7 +166,7 @@ def proses_semua():
             data_per_pasaran[p] = []
         data_per_pasaran[p].append(baris)
     
-    # Potong batas
+    # Potong batas per pasaran
     for p in list(data_per_pasaran.keys()):
         if len(data_per_pasaran[p]) > LIMIT_PER_PASARAN:
             data_per_pasaran[p] = data_per_pasaran[p][-LIMIT_PER_PASARAN:]
@@ -207,19 +214,17 @@ def proses_semua():
         print(f"🔄 MEMPROSES: {p} | {total} baris")
         print(f"{'─'*70}")
         
-        # Siapkan data
         X, Y, Xv, Yv, batas = siapkan_data(dp)
         input_terbaru = np.array([dp[j]['angka'] for j in range(-LOOKBACK, 0)], dtype=np.float32)
         input_terbaru = np.expand_dims(input_terbaru, axis=0)
         
         hasil_pasaran = {}
         
-        # ─── 1. MANUAL ───
-        print(f"  ▶️  1/3 MANUAL (EPOCH={MANUAL_EPOCH}, BATCH={MANUAL_BATCH})...")
+        # 1. MANUAL
+        print(f"  ▶️  1/3 MANUAL...")
         model, info = latih_manual(X, Y, Xv, Yv)
         pred = model.predict(input_terbaru, verbose=0)
-        hasil_m = {}
-        hasil_m["pengaturan"] = info
+        hasil_m = {"pengaturan": info}
         for idx, nm in enumerate(nama_posisi):
             prob = pred[idx][0].copy()
             prob /= np.sum(prob)
@@ -228,19 +233,15 @@ def proses_semua():
             for d in range(10):
                 prob_ov[d] *= bobot[str(d)]
             prob_ov /= np.sum(prob_ov)
-            hasil_m[nm] = {
-                "murni": format_hasil(prob),
-                "overdue": format_hasil(prob_ov)
-            }
+            hasil_m[nm] = {"murni": format_hasil(prob), "overdue": format_hasil(prob_ov)}
         hasil_pasaran["manual"] = hasil_m
         print(f"     ✅ Selesai")
         
-        # ─── 2. EARLY STOPPING ───
+        # 2. EARLY STOPPING
         print(f"  ▶️  2/3 EARLY STOPPING...")
         model, info = latih_earlystop(X, Y, Xv, Yv)
         pred = model.predict(input_terbaru, verbose=0)
-        hasil_e = {}
-        hasil_e["pengaturan"] = info
+        hasil_e = {"pengaturan": info}
         for idx, nm in enumerate(nama_posisi):
             prob = pred[idx][0].copy()
             prob /= np.sum(prob)
@@ -249,19 +250,15 @@ def proses_semua():
             for d in range(10):
                 prob_ov[d] *= bobot[str(d)]
             prob_ov /= np.sum(prob_ov)
-            hasil_e[nm] = {
-                "murni": format_hasil(prob),
-                "overdue": format_hasil(prob_ov)
-            }
+            hasil_e[nm] = {"murni": format_hasil(prob), "overdue": format_hasil(prob_ov)}
         hasil_pasaran["early_stopping"] = hasil_e
         print(f"     ✅ Berhenti di epoch {info['berhenti_di']}")
         
-        # ─── 3. OPTUNA ───
-        print(f"  ▶️  3/3 OPTUNA ({OPTUNA_CUPIKAN} percobaan)...")
+        # 3. OPTUNA
+        print(f"  ▶️  3/3 OPTUNA...")
         model, info = cari_optuna(X, Y, Xv, Yv)
         pred = model.predict(input_terbaru, verbose=0)
-        hasil_o = {}
-        hasil_o["pengaturan"] = info
+        hasil_o = {"pengaturan": info}
         for idx, nm in enumerate(nama_posisi):
             prob = pred[idx][0].copy()
             prob /= np.sum(prob)
@@ -270,18 +267,14 @@ def proses_semua():
             for d in range(10):
                 prob_ov[d] *= bobot[str(d)]
             prob_ov /= np.sum(prob_ov)
-            hasil_o[nm] = {
-                "murni": format_hasil(prob),
-                "overdue": format_hasil(prob_ov)
-            }
+            hasil_o[nm] = {"murni": format_hasil(prob), "overdue": format_hasil(prob_ov)}
         hasil_pasaran["optuna"] = hasil_o
         print(f"     ✅ Terbaik: EPOCH={info['epoch']} BATCH={info['batch_size']}")
         
-        # Tampilkan ringkasan
         hasil_akhir["hasil"][p] = hasil_pasaran
         
-        # Tampilkan perbandingan untuk EKOR sebagai contoh
-        print(f"\n 📊 PERBANDINGAN CONTOH (EKOR +OVERDUE):")
+        # Tampilkan contoh
+        print(f"\n 📊 CONTOH EKOR +OVERDUE:")
         print(f"    MANUAL    : 8D: {''.join(hasil_m['EKOR']['overdue']['tujuh'])}  9D: {''.join(hasil_m['EKOR']['overdue']['sembilan'])}")
         print(f"    EARLY STOP: 8D: {''.join(hasil_e['EKOR']['overdue']['tujuh'])}  9D: {''.join(hasil_e['EKOR']['overdue']['sembilan'])}")
         print(f"    OPTUNA    : 8D: {''.join(hasil_o['EKOR']['overdue']['tujuh'])}  9D: {''.join(hasil_o['EKOR']['overdue']['sembilan'])}")
@@ -292,7 +285,6 @@ def proses_semua():
     
     print(f"\n{'='*70}")
     print(f"✅ SEMUA SELESAI → hasil_prediksi.json")
-    print(f"   Isi: manual + early_stopping + optuna untuk tiap pasaran")
     print(f"{'='*70}")
 
 if __name__ == "__main__":
