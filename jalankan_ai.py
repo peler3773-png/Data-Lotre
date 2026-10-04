@@ -61,9 +61,10 @@ def hitung_bobot_overdue(data_pasaran, posisi_idx):
     return bobot
 
 def format_hasil(prob):
+    """Urutkan probabilitas → ambil 7+1 dan 9 teratas"""
     urut = np.argsort(prob)[::-1].tolist()
     sembilan = urut[:9]
-    tujuh = urut[:7] + [urut[7]]
+    tujuh = urut[:7] + [urut[9]]  # ← 7 pertama + posisi ke-10
     return {
         "tujuh": [str(a) for a in tujuh],
         "sembilan": [str(a) for a in sembilan]
