@@ -19,12 +19,12 @@ from tensorflow.keras.layers import LSTM, Dense, Input
 
 # === PENGATURAN ===
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
-LOOKBACK = 10          # Sekarang aman karena per pasaran
-LIMIT_DATA = 1625
+LOOKBACK = 10           # Panjang urutan riwayat per pasaran
+LIMIT_PER_PASARAN = 2000 # Maksimal baris TERBARU yang dipakai per pasaran
 FAKTOR_OVERDUE = 0.40
 
 def hitung_bobot_overdue(data_pasaran, posisi_idx):
-    """Hitung jarak putaran terakhir angka muncul → bobot makin besar jika makin lama hilang"""
+    """Hitung bobot: makin lama tidak muncul → bobot makin besar"""
     terakhir_muncul = {str(d): 999 for d in range(10)}
     for urutan, baris in enumerate(reversed(data_pasaran)):
         angka = str(baris['angka'][posisi_idx])
@@ -38,7 +38,6 @@ def hitung_bobot_overdue(data_pasaran, posisi_idx):
     return bobot
 
 def format_hasil(prob):
-    """Urutkan probabilitas → ambil 7+1 dan 9 teratas"""
     urut = np.argsort(prob)[::-1].tolist()
     sembilan = urut[:9]
     tujuh = urut[:7] + [urut[9]]
@@ -48,7 +47,6 @@ def format_hasil(prob):
     }
 
 def bangun_model(ukuran_urutan=LOOKBACK):
-    """Model LSTM murni tanpa embedding pasaran"""
     input_seq = Input(shape=(ukuran_urutan, 4), name='urutan_angka')
     x = LSTM(64, activation='relu', return_sequences=False)(input_seq)
     x = Dense(32, activation='relu')(x)
@@ -85,18 +83,21 @@ def proses_semua():
                 "waktu": bagian[3].strip()
             })
     
-    # ✅ Urutkan naik (lama dulu, baru kemudian baru)
+    # ✅ Urutkan naik: lama dulu → baru kemudian
     mentah_data.sort(key=lambda x: (x['tanggal'], x['waktu']))
-    if len(mentah_data) > LIMIT_DATA:
-        mentah_data = mentah_data[-LIMIT_DATA:]
     
-    # ✅ PISAH PER PASARAN — urut naik (lama → baru)
+    # ✅ PISAH PER PASARAN + POTONG LIMIT PER PASARAN
     data_per_pasaran = {}
     for baris in mentah_data:
         p = baris['pasaran']
         if p not in data_per_pasaran:
             data_per_pasaran[p] = []
         data_per_pasaran[p].append(baris)
+    
+    # ✅ Potong masing-masing ambil yang TERBARU saja
+    for p in list(data_per_pasaran.keys()):
+        if len(data_per_pasaran[p]) > LIMIT_PER_PASARAN:
+            data_per_pasaran[p] = data_per_pasaran[p][-LIMIT_PER_PASARAN:]
     
     list_pasaran = sorted(data_per_pasaran.keys())
     data_terbaru_per_pasaran = {p: data_per_pasaran[p][-1] for p in list_pasaran}
@@ -113,11 +114,11 @@ def proses_semua():
     hasil_akhir = {
         "diperbarui": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "zona_waktu": "WIB / UTC+7",
-        "total_data_semua": len(mentah_data),
+        "limit_per_pasaran": LIMIT_PER_PASARAN,
         "daftar_pasaran": list_pasaran,
         "data_terbaru": {p: {"nomor":d['nomor'],"tanggal":d['tanggal'],"waktu":d['waktu']} for p,d in data_terbaru_per_pasaran.items()},
         "seed": SEED_TETAP,
-        "pengaturan": f"LOOKBACK={LOOKBACK} | OVERDUE={FAKTOR_OVERDUE*100:.0f}%",
+        "pengaturan": f"LOOKBACK={LOOKBACK} | LIMIT_PER_PASARAN={LIMIT_PER_PASARAN} | OVERDUE={FAKTOR_OVERDUE*100:.0f}%",
         "hasil": {}
     }
     
@@ -130,12 +131,12 @@ def proses_semua():
         dp = data_per_pasaran[p]
         total = len(dp)
         
-        # Cukup data?
+        # Syarat minimal: LOOKBACK + 1
         if total < LOOKBACK + 1:
             print(f"\n⚠️ {p:8} — dilewati: butuh minimal {LOOKBACK+1} baris, punya {total}")
             continue
         
-        print(f"\n📌 {p:8} | Terakhir: {dp[-1]['nomor']} | {dp[-1]['tanggal']} | total: {total} baris")
+        print(f"\n📌 {p:8} | Terakhir: {dp[-1]['nomor']} | {dp[-1]['tanggal']} | dipakai: {total} baris")
         
         # === SIAPKAN DATA KHUSUS PASARAN INI ===
         sampel = total - LOOKBACK
@@ -149,11 +150,11 @@ def proses_semua():
         y_output = [Y[:, 0], Y[:, 1], Y[:, 2], Y[:, 3]]
         
         # === LATIH MODEL KHUSUS PASARAN INI ===
-        print(f"   🧠 Melatih LSTM (50 epoch)... sampel: {sampel}")
+        print(f"   🧠 Melatih LSTM... sampel: {sampel}")
         model = bangun_model(LOOKBACK)
         model.fit(X, y_output, epochs=50, batch_size=32, verbose=0)
         
-        # === INPUT PREDIKSI = 65 BARIS TERAKHIR PASARAN INI SAJA ===
+        # === INPUT PREDIKSI = LOOKBACK baris TERAKHIR pasaran ini saja ===
         input_terbaru = np.array(
             [dp[j]['angka'] for j in range(-LOOKBACK, 0)],
             dtype=np.float32
@@ -166,20 +167,18 @@ def proses_semua():
         for idx_pos, nama in enumerate(nama_posisi):
             prob_lstm = pred[idx_pos][0].copy()
             
-            # === LSTM MURNI ===
+            # LSTM MURNI
             hasil_lstm = format_hasil(prob_lstm)
             
-            # === LSTM + OVERDUE (NORMALISASI DITAMBAH) ===
+            # LSTM + OVERDUE + NORMALISASI
             bobot = hitung_bobot_overdue(dp, idx_pos)
             prob_gabung = prob_lstm.copy()
             for d in range(10):
                 prob_gabung[d] *= bobot[str(d)]
-            # Normalisasi → jumlah = 1
             prob_gabung /= np.sum(prob_gabung)
             
             hasil_gabung = format_hasil(prob_gabung)
             
-            # Tampil berdampingan
             print(f"   {nama:8}")
             print(f"      LSTM MURNI  | 8D: {''.join(hasil_lstm['tujuh'])}  | 9D: {''.join(hasil_lstm['sembilan'])}")
             print(f"      +OVERDUE    | 8D: {''.join(hasil_gabung['tujuh'])}  | 9D: {''.join(hasil_gabung['sembilan'])}")
