@@ -12,7 +12,7 @@ import tensorflow as tf
 tf.random.set_seed(SEED_TETAP)
 tf.get_logger().setLevel('ERROR')
 
-# === Cek Optuna SAJA — TIDAK instal otomatis lagi ===
+# === Cek Optuna SAJA ===
 try:
     import optuna
 except ImportError:
@@ -39,7 +39,7 @@ MANUAL_BATCH = 32
 OPTUNA_EPOCH_MIN = 20
 OPTUNA_EPOCH_MAX = 80
 OPTUNA_BATCH_CHOICES = [16, 32, 64]
-OPTUNA_CUPIKAN = 10  # Dikurangi sedikit agar lebih cepat
+OPTUNA_CUPIKAN = 10
 
 def hitung_bobot_overdue(data_pasaran, posisi_idx):
     terakhir_muncul = {str(d): 999 for d in range(10)}
@@ -75,25 +75,45 @@ def bangun_model(ukuran_urutan=LOOKBACK):
     mdl.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
     return mdl
 
+# ✅ DIPERBAIKI: Pastikan X dan Y jumlahnya sama
 def siapkan_data(dp):
     total = len(dp)
     sampel = total - LOOKBACK
+    
+    if sampel < 20:  # Minimal punya data latih + validasi
+        return None, None, None, None, 0
+    
     X = np.zeros((sampel, LOOKBACK, 4), dtype=np.float32)
     Y = np.zeros((sampel, 4), dtype=np.int32)
+    
     for i in range(sampel):
         X[i] = [dp[j]['angka'] for j in range(i, i + LOOKBACK)]
         Y[i] = dp[i + LOOKBACK]['angka']
-    y_output = [Y[:, 0], Y[:, 1], Y[:, 2], Y[:, 3]]
-    batas = max(LOOKBACK + 1, int(0.9 * sampel))  # Minimal data validasi
-    return X[:batas], y_output[:], X[batas:], y_output[:], batas
+    
+    # Bagi 90% latih, 10% validasi — pastikan jumlah sama
+    batas = int(0.9 * sampel)
+    if batas < 5:
+        batas = max(5, sampel - 5)
+    
+    X_latih = X[:batas]
+    Y_latih = [Y[:batas, 0], Y[:batas, 1], Y[:batas, 2], Y[:batas, 3]]
+    
+    X_valid = X[batas:]
+    Y_valid = [Y[batas:, 0], Y[batas:, 1], Y[batas:, 2], Y[batas:, 3]]
+    
+    return X_latih, Y_latih, X_valid, Y_valid, batas
 
 def latih_manual(X, Y, Xv, Yv):
+    if X is None:
+        return None, None
     model = bangun_model()
     model.fit(X, Y, epochs=MANUAL_EPOCH, batch_size=MANUAL_BATCH,
               validation_data=(Xv, Yv), verbose=0)
     return model, {"epoch": MANUAL_EPOCH, "batch_size": MANUAL_BATCH}
 
 def latih_earlystop(X, Y, Xv, Yv):
+    if X is None:
+        return None, None
     model = bangun_model()
     es = EarlyStopping(monitor='val_loss', patience=8, restore_best_weights=True)
     hist = model.fit(X, Y, epochs=100, batch_size=MANUAL_BATCH,
@@ -102,6 +122,8 @@ def latih_earlystop(X, Y, Xv, Yv):
     return model, {"epoch": max(5, dipakai), "batch_size": MANUAL_BATCH, "berhenti_di": len(hist.history['loss'])}
 
 def cari_optuna(X, Y, Xv, Yv):
+    if X is None:
+        return None, None
     def tujuan(trial):
         epoch = trial.suggest_int('epoch', OPTUNA_EPOCH_MIN, OPTUNA_EPOCH_MAX)
         batch = trial.suggest_categorical('batch_size', OPTUNA_BATCH_CHOICES)
@@ -145,7 +167,7 @@ def proses_semua():
                 "waktu": bagian[3].strip()
             })
     
-    # ✅ HAPUS DUPLIKAT: pasaran + tanggal = unik
+    # Hapus duplikat
     dilihat = set()
     bersih = []
     for entri in mentah_data:
@@ -155,10 +177,8 @@ def proses_semua():
             bersih.append(entri)
     mentah_data = bersih
     
-    # Urutkan: lama → baru
     mentah_data.sort(key=lambda x: (x['tanggal'], x['waktu']))
     
-    # Pisah per pasaran
     data_per_pasaran = {}
     for baris in mentah_data:
         p = baris['pasaran']
@@ -166,7 +186,6 @@ def proses_semua():
             data_per_pasaran[p] = []
         data_per_pasaran[p].append(baris)
     
-    # Potong batas per pasaran
     for p in list(data_per_pasaran.keys()):
         if len(data_per_pasaran[p]) > LIMIT_PER_PASARAN:
             data_per_pasaran[p] = data_per_pasaran[p][-LIMIT_PER_PASARAN:]
@@ -174,7 +193,6 @@ def proses_semua():
     list_pasaran = sorted(data_per_pasaran.keys())
     data_terbaru = {p: data_per_pasaran[p][-1] for p in list_pasaran}
     
-    # Tampilkan daftar
     print("\n" + "="*70)
     print("📋 DATA & 3 METODE: MANUAL | EARLY STOPPING | OPTUNA")
     print("="*70)
@@ -206,8 +224,8 @@ def proses_semua():
         dp = data_per_pasaran[p]
         total = len(dp)
         
-        if total < LOOKBACK + 1:
-            print(f"\n⚠️ {p:8} — dilewati: butuh minimal {LOOKBACK+1} baris, punya {total}")
+        if total < LOOKBACK + 20:  # Minimal cukup data latih + validasi
+            print(f"\n⚠️ {p:8} — dilewati: butuh minimal {LOOKBACK+20} baris, punya {total}")
             continue
         
         print(f"\n{'─'*70}")
@@ -215,6 +233,10 @@ def proses_semua():
         print(f"{'─'*70}")
         
         X, Y, Xv, Yv, batas = siapkan_data(dp)
+        if X is None:
+            print(f" ⚠️ Data belum cukup untuk dilatih")
+            continue
+        
         input_terbaru = np.array([dp[j]['angka'] for j in range(-LOOKBACK, 0)], dtype=np.float32)
         input_terbaru = np.expand_dims(input_terbaru, axis=0)
         
@@ -273,13 +295,11 @@ def proses_semua():
         
         hasil_akhir["hasil"][p] = hasil_pasaran
         
-        # Tampilkan contoh
         print(f"\n 📊 CONTOH EKOR +OVERDUE:")
         print(f"    MANUAL    : 8D: {''.join(hasil_m['EKOR']['overdue']['tujuh'])}  9D: {''.join(hasil_m['EKOR']['overdue']['sembilan'])}")
         print(f"    EARLY STOP: 8D: {''.join(hasil_e['EKOR']['overdue']['tujuh'])}  9D: {''.join(hasil_e['EKOR']['overdue']['sembilan'])}")
         print(f"    OPTUNA    : 8D: {''.join(hasil_o['EKOR']['overdue']['tujuh'])}  9D: {''.join(hasil_o['EKOR']['overdue']['sembilan'])}")
     
-    # Simpan
     with open("hasil_prediksi.json", "w", encoding="utf-8") as f:
         json.dump(hasil_akhir, f, ensure_ascii=False, indent=2)
     
