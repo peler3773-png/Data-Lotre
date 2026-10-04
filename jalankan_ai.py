@@ -19,8 +19,8 @@ from tensorflow.keras.layers import LSTM, Dense, Input
 
 # === PENGATURAN ===
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
-LOOKBACK = 65          # Sekarang aman karena per pasaran
-LIMIT_DATA = 16250
+LOOKBACK = 10          # Sekarang aman karena per pasaran
+LIMIT_DATA = 1625
 FAKTOR_OVERDUE = 0.40
 
 def hitung_bobot_overdue(data_pasaran, posisi_idx):
