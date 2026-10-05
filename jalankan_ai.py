@@ -31,11 +31,11 @@ DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/ma
 LOOKBACK = 12
 LIMIT_PER_PASARAN = 2000
 FAKTOR_OVERDUE = 0.40
-OPTUNA_EPOCH_MIN = 50
-OPTUNA_EPOCH_MAX = 60
-OPTUNA_BATCH_CHOICES = [16, 32, 64, 128]
+OPTUNA_EPOCH_MIN = 49
+OPTUNA_EPOCH_MAX = 80
+OPTUNA_BATCH_CHOICES = [32, 64, 128]
 OPTUNA_CUPIKAN = 10
-VALIDASI_MIN = 5
+VALIDASI_MIN = 7
 
 def hitung_bobot_overdue(data_pasaran, posisi_idx):
     terakhir_muncul = {str(d): None for d in range(10)}
@@ -107,11 +107,11 @@ def latih_earlystop(X, Y, Xv, Yv):
         return None, None
     model = bangun_model()
     # ✅ Patience 10: seimbang antara akurasi & kecepatan
-    es = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
+    es = EarlyStopping(monitor='val_loss', patience=12, restore_best_weights=True)
     hist = model.fit(X, Y, epochs=100, batch_size=32,
                      validation_data=(Xv, Yv), callbacks=[es], verbose=0)
     dipakai = len(hist.history['loss']) - es.patience
-    return model, {"epoch": max(5, dipakai), "batch_size": 32, "berhenti_di": len(hist.history['loss'])}
+    return model, {"epoch": max(6, dipakai), "batch_size": 32, "berhenti_di": len(hist.history['loss'])}
 
 def cari_optuna(X, Y, Xv, Yv):
     if X is None:
@@ -121,7 +121,7 @@ def cari_optuna(X, Y, Xv, Yv):
         batch = trial.suggest_categorical('batch_size', OPTUNA_BATCH_CHOICES)
         m = bangun_model()
         # ✅ Patience 6 saat pencarian: cukup cepat & tetap akurat
-        es = EarlyStopping(monitor='val_loss', patience=6, restore_best_weights=True)
+        es = EarlyStopping(monitor='val_loss', patience=10, restore_best_weights=True)
         h = m.fit(X, Y, epochs=epoch, batch_size=batch,
                   validation_data=(Xv, Yv), callbacks=[es], verbose=0)
         return min(h.history['val_loss'])
@@ -136,7 +136,7 @@ def cari_optuna(X, Y, Xv, Yv):
     model.fit(X, Y, epochs=bp['epoch'], batch_size=bp['batch_size'],
               validation_data=(Xv, Yv), callbacks=[es], verbose=0)
     
-    return model, {"epoch": bp['epoch'], "batch_size": bp['batch_size'], "skor_terbaik": round(study.best_value, 6)}
+    return model, {"epoch": bp['epoch'], "batch_size": bp['batch_size'], "skor_terbaik": round(study.best_value, 8)}
 
 def proses_semua():
     print("📥 Membaca data...")
