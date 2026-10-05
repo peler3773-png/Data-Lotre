@@ -31,10 +31,10 @@ DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/ma
 LOOKBACK = 12
 LIMIT_PER_PASARAN = 2000
 FAKTOR_OVERDUE = 0.40
-OPTUNA_EPOCH_MIN = 25
+OPTUNA_EPOCH_MIN = 50
 OPTUNA_EPOCH_MAX = 60
-OPTUNA_BATCH_CHOICES = [16, 32, 64]
-OPTUNA_CUPIKAN = 5
+OPTUNA_BATCH_CHOICES = [16, 32, 64, 128]
+OPTUNA_CUPIKAN = 10
 VALIDASI_MIN = 5
 
 def hitung_bobot_overdue(data_pasaran, posisi_idx):
