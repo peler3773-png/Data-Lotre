@@ -27,15 +27,17 @@ from tensorflow.keras.callbacks import EarlyStopping
 
 # === PENGATURAN ===
 DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/main/data_undian.txt"
-LOOKBACK = 12                  # ✅ Tetap — cocok untuk siklus pasaran
-LIMIT_PER_PASARAN = 2000       # ✅ Tetap — cukup data tanpa terlalu lama
-FAKTOR_OVERDUE = 0.40          # ✅ Tetap — seimbang
-
-OPTUNA_EPOCH_MIN = 50
-OPTUNA_EPOCH_MAX = 200         # ← Naikkan: beri ruang konvergensi
-OPTUNA_BATCH_CHOICES = [32, 64, 128, 256, 512]  # ← Tambah nilai tengah
-OPTUNA_CUPIKAN = 20            # ← Naikkan agar Optuna lebih teliti
-VALIDASI_MIN = 10              # ✅ Tetap
+LOOKBACK = 12
+LIMIT_PER_PASARAN = 2000
+FAKTOR_OVERDUE = 0.40
+OPTUNA_EPOCH_MIN = 49
+OPTUNA_EPOCH_MAX = 80
+OPTUNA_BATCH_CHOICES = [32, 64, 128]
+OPTUNA_CUPIKAN = 10
+VALIDASI_MIN = 7
+PATIENCE_ES = 12
+PATIENCE_OPTUNA_SEARCH = 8
+PATIENCE_OPTUNA_FINAL = 10
 
 def hitung_bobot_overdue(data_pasaran, posisi_idx):
     terakhir_muncul = {str(d): None for d in range(10)}
