@@ -31,11 +31,11 @@ DATA_UNDIAN_URL = "https://raw.githubusercontent.com/peler3773-png/Data-Lotre/ma
 LOOKBACK = 12
 LIMIT_PER_PASARAN = 2000
 FAKTOR_OVERDUE = 0.40
-OPTUNA_EPOCH_MIN = 49
-OPTUNA_EPOCH_MAX = 80
-OPTUNA_BATCH_CHOICES = [32, 64, 128]
+OPTUNA_EPOCH_MIN = 50
+OPTUNA_EPOCH_MAX = 99
+OPTUNA_BATCH_CHOICES = [64, 128, 512
 OPTUNA_CUPIKAN = 10
-VALIDASI_MIN = 7
+VALIDASI_MIN = 10
 
 def hitung_bobot_overdue(data_pasaran, posisi_idx):
     terakhir_muncul = {str(d): None for d in range(10)}
@@ -64,7 +64,7 @@ def format_hasil(prob):
     """Urutkan probabilitas → ambil 7+1 dan 9 teratas"""
     urut = np.argsort(prob)[::-1].tolist()
     sembilan = urut[:9]
-    tujuh = urut[:7] + [urut[9]]  # ← 7 pertama + posisi ke-10
+    tujuh = urut[:8] + [urut[9]]  # ← 7 pertama + posisi ke-10
     return {
         "tujuh": [str(a) for a in tujuh],
         "sembilan": [str(a) for a in sembilan]
